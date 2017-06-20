@@ -188,7 +188,7 @@ endif
 
 push:
 	@ECHO "<---------------push git----------------->"
-	git push origin master
+	git push origin dev
 	@ECHO "<---------------end----------------->"
 	
 tag:
@@ -211,4 +211,13 @@ endif
 status:
 	@ECHO "<---------------status git----------------->"
 	git status
+	@ECHO "<---------------end----------------->"
+	
+merge:
+	@ECHO "<---------------merge to master git----------------->"
+	git checkout master
+	git merge dev
+	git push origin master
+	git checkout dev
+	git branch
 	@ECHO "<---------------end----------------->"
