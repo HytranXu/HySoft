@@ -194,7 +194,7 @@ push:
 tag:
 	@ECHO "<---------------tag git----------------->"
 ifeq ($(com),)
-	@ECHO 'make tag="tagname" tagver="v1.0"'
+	@ECHO 'make tag="tagcomment" tagver="v1.0"'
 	@ECHO "<---------------end----------------->"
 else
 	@ECHO tag name is: $(TagCOMMENT) version is $(TagVer)
