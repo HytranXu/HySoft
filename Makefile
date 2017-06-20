@@ -12,8 +12,8 @@ TFILE 	= ./doc/HyRule_noErro.jjt
 #git version comments
 COMMENT=$(com)	
 #git tag comments
-TagCOMMENT=$(tag)
-TagVer=$(tagver)	
+TagCOMMENT=$(com)
+TagVer=$(ver)	
 
 #以下部分基本不需要调整#
 #定义目标#
@@ -194,13 +194,18 @@ push:
 tag:
 	@ECHO "<---------------tag git----------------->"
 ifeq ($(com),)
-	@ECHO 'make tag="tagcomment" tagver="v1.0"'
+	@ECHO 'make tag com="tagcomment" ver="v1.0"'
 	@ECHO "<---------------end----------------->"
 else
-	@ECHO tag name is: $(TagCOMMENT) version is $(TagVer)
+ifeq ($(ver),)
+	@ECHO 'make tag com="tagcomment" ver="v1.0"'
+	@ECHO "<---------------end----------------->"
+else
+	@ECHO tag comment is: $(TagCOMMENT) version is $(TagVer)
 	git tag -a $(TagVer) -m "$(TagCOMMENT)"
 	git push origin $(TagVer)
 	@ECHO "<---------------end----------------->"
+endif
 endif
 
 status:
