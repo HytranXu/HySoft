@@ -181,6 +181,7 @@ else
 	git add Makefile
 	git add doc
 	git add src
+	git add .gitignore
 	git status
 	git commit -m "$(COMMENT)"
 	@ECHO "<---------------end----------------->"
