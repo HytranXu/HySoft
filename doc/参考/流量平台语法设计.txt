@@ -1,0 +1,115 @@
+一、流量平台示例
+1、设计态
+
+//移动流量供应商选择规则
+dor
+tenent Mobile_data
+{
+	/*供应商定义*/
+	data Suplier
+	{
+		int chargeSpeed;	//充值速度
+		int sucessRatio;	//成功率
+		int price;			//价格
+		string provName;	//省份 全国，北京，广东
+		int volLeft;		//剩余流量
+		int priority;		//内部排序使用
+	}
+	
+	//用户定义
+	data User
+	{
+		string provName;	//省份 全国，北京，广东
+		int chargeVolume;	//充值流量
+		string brand;		//用户品牌 VIP，一般
+	}
+	
+	/*供应商选择规则定义*/
+	rule seleSup
+	{
+		Suplier sups[10];	//可选提供商
+		
+		//为user选择提供商
+		Suplier[] selecSup(User usr)
+		{
+			//将返回结果
+			Suplier chose[10];
+						
+			//1、2实现
+			for(one of sups)
+			{
+				{int t = 0, m=9,t[1] = {1,2},d[2][4] = {9,9};}
+				if((usr.provName == one.provName) || 
+				   (usr.provName == "全国" && one.provName == "全国"))
+				{
+					chose.add(one);
+				}
+			}
+			
+			//3实现
+			for(one of chose)
+			{
+				if(one.volLeft < user.chargeVolume)
+				{
+					chose.del(one);
+				}
+			}
+			
+			//4 5实现
+			int priceRati = 80, speedRati = 20;
+			if(user.brand == VIP)
+			{
+				priceRati = 20;
+				speedRati = 80;
+			}
+		
+			for(one of chose)
+			{
+				one.priority = (priceRati*one.price) + speedRati*(one.chargeSpeed*30 + one.chargeSpeed*70);
+			}
+			
+			chose.ascendon(priority);
+			
+			return chose;
+		}
+	}
+}
+
+2、运行态
+dor
+load Mobile_data
+{
+	Suplier sup[3];
+	sup[0].chargeSpeed = 10;
+	sup[0].sucessRatio = 10;
+	sup[0].price	=	10;
+	sup[0].provName = "北京";
+	sup[0].volLeft = 1000;
+	sup[0].priority = 0;
+	
+	sup[1].chargeSpeed = 20;
+	sup[1].sucessRatio = 30;
+	sup[1].price	=	20;
+	sup[1].provName = "全国";
+	sup[1].volLeft = 3000;
+	sup[1].priority = 0;
+	
+	sup[2].chargeSpeed = 30;
+	sup[2].sucessRatio = 40;
+	sup[2].price	=	10;
+	sup[2].provName = "广东";
+	sup[2].volLeft = 1000;
+	sup[2].priority = 0;
+	
+	seleSup sup;
+	sup.sups = sup;
+	
+	User use;
+	use.provName = "北京";
+	use.chargeVolume = 500;
+	use.brand = "VIP";
+	
+	Suplier t[12];
+	t = sup.selecSup(use);
+}
+end;

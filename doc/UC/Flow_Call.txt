@@ -1,0 +1,41 @@
+dor > ./doc/UC/dump.txt
+
+hy_debug on;
+hy_show ends;
+hy_show mems;
+load Mobile_data
+{
+	Suplier sup[3];
+	sup[0].chargeSpeed = 10;
+	sup[0].sucessRatio = 10;
+	sup[0].price	=	10;
+	sup[0].provName = "北京";
+	sup[0].volLeft = 1000;
+	sup[0].priority = 0;
+	
+	sup[1].chargeSpeed = 20;
+	sup[1].sucessRatio = 30;
+	sup[1].price	=	20;
+	sup[1].provName = "全国";
+	sup[1].volLeft = 3000;
+	sup[1].priority = 0;
+	
+	sup[2].chargeSpeed = 30;
+	sup[2].sucessRatio = 40;
+	sup[2].price	=	10;
+	sup[2].provName = "广东";
+	sup[2].volLeft = 1000;
+	sup[2].priority = 0;
+	
+	seleSup sup;
+	sup.sups = sup;
+	
+	User use;
+	use.provName = "北京";
+	use.chargeVolume = 500;
+	use.brand = "VIP";
+	
+	Suplier t[12];
+	t = sup.selecSup(use);
+}
+end;

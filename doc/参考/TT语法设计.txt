@@ -1,0 +1,105 @@
+一、TT示例
+1、设计态
+
+//移动TT流转规则
+dor
+tenent Mobile_TT
+{
+	/*TTControl定义*/
+	data TTControl
+	{
+		int type;			//工单类型 1网络报障 2资费报障
+		int days;			//期限
+		int priority;		//优先级  1正常 2高
+		string deptName;	//部门名 分快速处理 正常处理
+	}
+	
+	//用户定义
+	data User
+	{
+		int type;			//工单类型 1网络报障 2资费报障
+		int urgency;		//紧急度 1正常 2紧急
+		string brand;		//用户品牌 VIP，普通
+	}
+	
+	/*流转规则定义*/
+	rule TTRule
+	{
+		TTControl chioces[10];	//可选流转
+		
+		//为user选择流转
+		TTControl selecNode(User usr)
+		{
+			//将返回结果
+			TTControl chose;
+			string depName;
+			int priorty;
+			
+			//3实现
+			if(usr.brand == "VIP")
+			{
+				priorty = 2;
+			}
+			else if(usr.urgency == 2 && usr.type == 1)
+			{
+				priorty = 2;
+			}
+			
+			//2实现	
+			if(2 == priorty)
+			{
+				depName = "快速处理";	
+			}
+			else
+			{
+				depName = "正常处理";
+			}
+			
+			//寻找部门
+			for(one of chioces)
+			{
+				if(one.type == usr.type &&
+				   one.priority == priority &&
+				   one.deptName == depName)
+				 {
+				 	chose = one;
+				 	break;
+				 }
+			}
+			
+			return chose;
+		}
+	}
+}
+
+2、运行态
+dor
+load Mobile_TT
+{
+	TTControl tc[3];
+	tc[0].type = 1;
+	tc[0].days	=	1;
+	tc[0].priority	=	2;
+	tc[0].deptName	=	"分快速处理";
+	
+	tc[1].type = 2;
+	tc[1].days	=	1;
+	tc[1].priority	=	2;
+	tc[1].deptName	=	"分快速处理";
+	
+	tc[2].type = 2;
+	tc[2].days	=	7;
+	tc[2].priority	=	1;
+	tc[2].deptName	=	"正常处理";
+	
+	TTRule selChan;
+	selChan.chioces = tc;
+	
+	User use;
+	use.type = 1;
+	use.urgency = 1;
+	use.brand = "VIP";
+	
+	TTControl ret = selChan.selecNode(use);
+}
+end;

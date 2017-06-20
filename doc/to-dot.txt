@@ -1,0 +1,23 @@
+1、vector[t++]，add,del,getId,getItem,copy,clear
+   for(one of vector) return,[]与vector胡copy,强制转换
+   [] = vector; vetor = [];
+   检查栈正常
+2、函数参数处理,销毁变量
+3、map, add,del,have,copy,clear
+   string, startsWith,endsWith,substr,replace,find
+   返回类型不符提醒
+4、全局函数，hDelDef,hDelVar,hShow,hPrint
+5、funcLib、FunctionDeclare、LoadDeclear、LibDeclare变量清除
+6、序列化
+7、异常处理
+8、输出日志花、日志级别调整
+9、去掉不需要的多余代码
+
+ < MAP: "map" >
+| < VECTOR: "vector" >
+
+
+
+
+完成
+1、去掉无效index

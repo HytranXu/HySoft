@@ -1,0 +1,44 @@
+dor > ./doc/UC/dump.txt
+
+hy_debug on;
+hy_show ends;
+hy_show mems;
+load
+{
+	rule ok
+	{
+		int t = 0;//, m=9,t[1] = {1,2},d[2][4] = {9,9};
+		int [][] func(int t)
+		{
+			{int t = 0, m=9,t[1] = {1,2},d[2][4] = {9,9};}
+			for(int t = 0; t<20; t++)
+			{;}
+			
+			if((bc.a == b) && ((int)this.e --) > this.m)
+			{;}
+			
+			/*adjkfakdfj;*/
+			//adkjfad
+			for(one of two)
+			{
+				++a;
+				a++;
+			}
+			while(true)
+			{
+				{int t = 0, m=9,t[1] = {1,2},d[2][4] = {9,9};}
+				
+				if(b == c)
+				{
+					break;
+				}
+				else
+				{
+					continue;
+				}
+			}
+			return a;
+		}
+	}
+}
+end;

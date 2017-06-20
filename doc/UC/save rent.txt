@@ -1,0 +1,40 @@
+dor > ./doc/UC/dump.txt
+
+hy_debug on;
+hy_show mems;
+library Mobile_data
+{
+	include Mobile_dd;
+	
+	//用户定义
+	data User
+	{
+		string strname;	
+		string brand;		//用户品牌 VIP，一般
+	}
+		
+	int t=0, t2 = 1;
+	
+	/*供应商选择规则定义*/
+	function seleSup
+	{
+		User sups[10];	//可选提供商
+			
+		//为user选择提供商
+		User selecSup(User usr)
+		{	
+			//1、2实现
+			for(one of sups)
+			{
+				if(usr.strname == one.strname)
+					return one;
+				else if(usr.brand == one.brand)
+					return one;
+				else
+					return null;
+			}
+		}
+	}
+}
+
+

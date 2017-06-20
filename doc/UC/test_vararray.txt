@@ -1,0 +1,24 @@
+dor > ./doc/UC/dump.txt
+/*调试：数组及初始化
+*/
+hy_debug on;
+hy_show ends;
+hy_show mems;
+load test.fun,testok
+{
+	int t = 1, t2[2] = {3,2}, mp[2][4],mk = ++t,dd = kk.m++, mk1 = a*b;
+	int m = t + t2++;
+	int t = this.m;
+	char ch, cha = 'a', km = ab(12), mm = a.b(10);
+	km = ab(12);
+	mm = a.b(10);
+	t2[1] = 10;
+	t2[2] = ac(1);
+	char m = (char)b;
+	bool t = true, yy = d!= c, kj = a || b, jk = (true || a.k), t2[2] = {true,false},tm[2][3], temp = (+a && !b), md = 2>1;
+	double w = 0.3,mt[2] = {0.5,5.3}, kt[2][5];
+	string ws = "okString", tml[3] = {"tm1","tm2"}, tmm[3][5];
+	object to = aobj, objs[3] = {obj1,obj3}, obj4[4][5];
+	int a = de.c(10);
+}
+end;

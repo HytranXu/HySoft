@@ -1,0 +1,87 @@
+一、PushC示例
+1、设计态
+
+//移动PushC选择规则
+dor
+tenent Mobile_Pushc
+{
+	/*渠道定义*/
+	data Channel
+	{
+		int timesCont;		//次数控制
+		string chanName;	//渠道名 微信 短信
+	}
+	
+	//用户定义
+	data User
+	{
+		string priChnnel;	//首选媒体
+		int days[10];			//可发送日期
+		int timeSent;		//已发送次数
+		string brand;		//用户品牌 VIP，全球通
+	}
+	
+	/*渠道选择规则定义*/
+	rule seleChnnel
+	{
+		Channel chans[2];	//可选提供商
+		
+		//为user选择渠道
+		Channel selecChn(User usr, int day)
+		{
+			//将返回结果
+			Channel chose;
+			
+			//1实现
+			if(day !in usr.days)
+			{
+				return chose;
+			}
+			
+			//2 3实现	
+			for(one of chans)
+			{
+				if(usr.priChnnel != "" && one.chanName == usr.priChnnel &&
+				   usr.timeSent < one.timesCont)
+				{
+					chose = one;
+					break;
+				}
+				else if(usr.timeSent < one.timesCont)
+				{
+					chose = one;
+					break;
+				}		
+			}
+			
+			return chose;
+		}
+	}
+}
+
+2、运行态
+dor
+load Mobile_Pushc
+{
+	Channel chans[2];
+	chans[0].timesCont = 10;
+	chans[0].chanName	=	"微信";
+	
+	chans[0].timesCont = 5;
+	chans[0].chanName	=	"短信";
+	
+	seleChnnel selChan;
+	selChan.chans = chans;
+	
+	User use;
+	use.priChnnel = "北京";
+	use.days[0] = 1;
+	use.days[1] = 3;
+	use.days[2] = 4;
+	use.timeSent = 6;
+	use.brand = "VIP";
+	
+	Channel ret = selChan.selecChn(use,3);
+	ret = selChan.selecChn(use,3);
+}
+end;

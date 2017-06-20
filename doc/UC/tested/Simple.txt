@@ -1,0 +1,44 @@
+hy_debug on;
+hy_debug runon; 
+hy_show tabs;
+hy_set log off;
+hy_set loglv debug;
+load
+{
+	/*定义商品*/
+	data Product
+	{
+		int inventory;	//库存数量
+		bool bSaling;	//是否可以买
+		string name;	//商品名称
+	}
+	
+	int price = 100;			//价格
+	Product prod[3];			//现有商品
+	prod[0].inventory = 2;
+	prod[0].bSaling = true;
+	prod[0].name = "海尔电视";
+	
+	prod[1].inventory = 0;
+	prod[1].bSaling = false;
+	prod[1].name = "LG电视";
+	
+	prod[2].inventory = 200;
+	prod[2].bSaling = true;
+	prod[2].name = "HTC电视";
+	
+	Product want;
+	
+	/*找出名称正确，存在或存，可以卖，价格不高于200*/
+	for(one of prod)
+	{
+		if(one.name == "HTC电视" && one.inventory >=0 && one.bSaling == true && price <= 200)
+		{
+			want = one;
+			break;
+		}
+	}
+		
+	toClient: want;
+}
+end;

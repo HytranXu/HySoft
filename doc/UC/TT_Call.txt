@@ -1,0 +1,34 @@
+dor > ./doc/UC/dump.txt
+
+hy_debug on;
+hy_show ends;
+hy_show mems;
+load Mobile_TT
+{
+	TTControl tc[3];
+	tc[0].type = 1;
+	tc[0].days	=	1;
+	tc[0].priority	=	2;
+	tc[0].deptName	=	"分快速处理";
+	
+	tc[1].type = 2;
+	tc[1].days	=	1;
+	tc[1].priority	=	2;
+	tc[1].deptName	=	"分快速处理";
+	
+	tc[2].type = 2;
+	tc[2].days	=	7;
+	tc[2].priority	=	1;
+	tc[2].deptName	=	"正常处理";
+	
+	TTRule selChan;
+	selChan.chioces = tc;
+	
+	User use;
+	use.type = 1;
+	use.urgency = 1;
+	use.brand = "VIP";
+	
+	TTControl ret = selChan.selecNode(use);
+}
+end;

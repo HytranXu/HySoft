@@ -1,0 +1,69 @@
+hy_debug on;
+hy_debug runon; 
+hy_show tabs;
+hy_set log off;
+hy_set loglv debug;
+load Mobile_Pushc
+{		
+	/*渠道定义*/
+	data Channel
+	{
+		int timesCont;		//次数控制
+		string chanName;	//渠道名 微信 短信
+	}
+	
+	//用户定义
+	data User
+	{
+		string priChnnel;	//首选媒体
+		int days[2];		//可发送日期
+		int timeSent;		//已发送次数
+		string brand;		//用户品牌 VIP，全球通
+	}
+	
+	/*渠道选择规则定义*/
+	funlib seleChnnel
+	{
+		Channel chans[2];	//可选提供商
+		
+		chans[0].timesCont = 500;
+		chans[0].chanName = "Unicom";
+		chans[1].timesCont = 100;
+		chans[1].chanName = "ChinaMobile";
+		
+		//为user选择渠道
+		Channel selecChn(User usr, int day)
+		{
+			//将返回结果
+			Channel chose;
+			
+			//1实现
+			if(day !in usr.days)
+			{
+				return null;
+			}
+			
+			//2 3实现	
+			for(one of chans)
+			{
+				if(usr.priChnnel != "" && one.chanName == usr.priChnnel && usr.timeSent < one.timesCont)
+				{
+					chose = one;
+					break;
+				}	
+			}
+			
+			return chose;
+		}
+	}
+	
+	User usa;
+	usa.priChnnel = "Unicom";
+	usa.days[0] = 3;
+	usa.days[1] = 4;
+	usa.timeSent = 1;
+	usa.brand = "全球通";
+	
+	Channel ret = seleChnnel.selecChn(usa,4);
+	toClient: ret;
+}

@@ -1,0 +1,102 @@
+hy_debug on;
+hy_debug runon; 
+hy_show tabs;
+hy_set log off;
+hy_set loglv debug;
+load Mobile_dd,temprule
+{	
+	/*int it = 10, itt[2][3] = {3,4},iindex=0;
+	string its = it;
+	its = it+1;
+	its = it*2;
+	itt[0][0] = it++;
+	itt[0][1] = 100;
+	itt[1][0] = 200;
+	itt[1][2] = its;
+	itt[++iindex][iindex --] = 600;
+	
+	string sname, sname2="zhonguo",sname3[2][2] = {"1","2"},sname=3;
+	sname = 1234;
+	sname2 = sname;
+	sname3[0][1] = "name301";
+	sname3[1][1] = 3456;
+	int stempp = sname3[1][1];
+	int stempp1 = sname3[0][0];
+	string sname4 = "123a";
+	sname4 = "xuhc";
+	
+	double d1,d2=1,d3[2][2][2]={0.1,0.2};
+	d1 = 4.;
+	d2 = d1++;
+	d3[0] = 45;
+	d3[0][0][0] = 67;
+	int dmp = d3[0][0][0];
+	string dstr;
+	dstr = d1;
+	d3[0][0][1] = dstr;
+	
+	bool b1,b2=false,b3[2][2] = {false,false};
+	b1 = true;
+	string br1 = b1;
+	b1 = br1;
+	string br2 = "true";
+	b1 = br2;
+	b2 = b1;
+	b3[0][0] = b2;
+	bool b1 = true;
+	string bk = "true",bk1 = 1,br = b1;
+	b3[0][1] = bk;
+	b3[1][1] = bk1;
+	
+	
+	char cc, c1='a';
+	cc = 'c';
+	string cstr = "123";
+	c1 = cstr;
+	int ci = cc;
+	cc = '1';
+	ci = cc;
+	
+	data test
+	{
+		int ip = 0;
+		string strname = "name";
+		bool bDone = false;
+		double dm[2][2] = {0.0,1.};
+	}
+	test t1,t2;
+	t1.ip = 100;
+	t1.strname = "t1";
+	t1.bDone = true;
+	string strdPrice = "1234";
+	t1.dm[1][1] = strdPrice;
+	t2 = t1;
+	t2.dm[0][0] = 800;
+	t1.dm[1][0] = t2.dm[0][0];*/
+	
+	/*供应商定义
+	data Suplier
+	{
+		int price;			//价格
+		string name;		//省份 全国，北京，广东
+		int time[2];
+	}
+	
+	Suplier s1,s2;
+	
+	s1.price = 200;
+	s1.name = "北京";
+	s1.time[0] = 3;
+	s1.time[1] = 4;
+	s2.price = 300;
+	s2.name = "广东";
+	s2.time[0] = 5;
+	s2.time[1] = 7;
+	
+	Suplier chose[4];*/
+	
+	/*chose.add(s1);
+	chose.add(s2);
+	chose.ascendon(price);
+	chose.del(s1);*/
+}

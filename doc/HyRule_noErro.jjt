@@ -1,0 +1,2946 @@
+/*---------------------------------------*/
+/*HySoft	HySoft规则引擎语法定义
+* Author 	Hytran
+* data		2017-3-12
+* email	    singsong168@hotmail.com
+* Version	0.1
+*/
+/*---------------------------------------*/
+//选项定义部分
+/*---------------------------------------*/
+options 
+{
+	JDK_VERSION = "1.8";
+	STATIC = false ;
+	MULTI=true;
+    NODE_EXTENDS="HyRuleNode";
+    TRACK_TOKENS=true;
+	JAVA_UNICODE_ESCAPE = true;
+  	LOOKAHEAD = 1;
+  	CHOICE_AMBIGUITY_CHECK = 2;
+  	OTHER_AMBIGUITY_CHECK = 1;
+  	DEBUG_PARSER = false;
+  	DEBUG_LOOKAHEAD = false;
+  	DEBUG_TOKEN_MANAGER = false;
+  	ERROR_REPORTING = true;
+  	UNICODE_INPUT = false;
+  	IGNORE_CASE = false;
+  	USER_TOKEN_MANAGER = false;
+  	USER_CHAR_STREAM = false;
+  	BUILD_PARSER = true;
+  	BUILD_TOKEN_MANAGER = true;
+  	SANITY_CHECK = true;
+  	FORCE_LA_CHECK = false;
+}
+/*---------------------------------------*/
+//定义规则引擎类Hy-Rule部分
+/*---------------------------------------*/
+/*
+ * 任何时间包括出现异常可以发送<EOF>结束
+ */
+PARSER_BEGIN(HySoft)
+
+package HyRules;
+
+import java.lang.StringBuilder;
+import java.io.InputStream;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.util.Stack;
+
+public class HySoft 
+{
+	//debug状态下一些调试命令字可以生效
+	private boolean bDebug = false;
+	//是否最后输出语法树
+	private boolean bShowTreeAtEnd = false;
+	//是否展示定义的属性
+	private boolean bShowMembers = false;
+	//是否显示符号表
+	private boolean bShowSystab = false;
+	/*
+	 * true时编译状态只编译然后保存定义到库中
+	 * false编译完后不保存到库而是直接运行
+	 */
+	private boolean bCompile = false;
+	private boolean bRunAfterC = false;
+	/*
+	 * true时重复执行Compile活动
+	 * false只执行一遍就等<EOF> | HYEOF结束
+	 * 无论true还是false在一次完成后遇到<EOF>都将结束
+	 */
+	private boolean bContinue = false;
+	
+	//收到hy_restart后将从这里开始读
+	public InputStream streamIn = null;
+	//compile运行一次后如果streamIn 和 sUsedNow不同将重新初始化
+	private InputStream sUsedNow = null;
+	private boolean bforceRestart = false;
+	
+	//全局数据表//当前处理数据表需要在libary、Loaddeclare中声明并设置，本地符号表
+	private DataTAB g_Systab = null;
+	//工作栈
+	private Stack<Object> sysStack = new Stack<Object>();
+	//当前处理数据表需要在funcDefine中声明并设置，本地符号表
+	protected DataTAB func_Systab = null;
+	//当前处理数据表需要在functionDefine中声明并设置，本地符号表
+	protected DataTAB function_Systab = null;
+	//日志组件
+	private LogOrShow logshow = new LogOrShow();
+	//全局数据表
+	private DataTAB g_DataDefine = null;
+	private FuncInfor funDefineInfor = null;
+	private FunctionLib liborLoadFundef = null;
+
+	//去除读取字符串的"
+	private String trimeDQM(String strInfor)
+	{
+		if(strInfor.startsWith("\""))
+			strInfor = strInfor.substring(1);
+		if(strInfor.endsWith("\""))
+			strInfor = strInfor.substring(0,strInfor.length()-1);
+		return strInfor;
+	}
+	private String trimeQM(String strInfor)
+	{
+		if(strInfor.startsWith("\'"))
+			strInfor = strInfor.substring(1);
+		if(strInfor.endsWith("\'"))
+			strInfor = strInfor.substring(0,strInfor.length()-1);
+		return strInfor;
+	}
+	
+	public boolean getShowTab()
+	{
+		return this.bShowSystab;
+	}
+	//主函数
+	public static void main(String[] args) throws ParseException, TokenMgrError 
+	{	
+		//help信息
+		System.out.println("HyRule 0.1:  Usage :");
+		System.out.println("java HyRule rulefile.ru");
+		System.out.println("java HyRule system input will be used.");
+		
+		//日志设置
+		LogOrShow.setInfoLevel(InforType.Error);
+		LogOrShow.setbWriteLog(true);
+		LogOrShow.setStrFileName("./log.txt");
+		LogOrShow.setMaxLogLength(100);
+		
+		//根据参数初始化对象
+		HySoft ruParser;
+    	if(args.length == 1) 
+    	{
+    		System.out.println("Hy-Rule 0.1:  Reading from file " + args[0] + " . . .");
+    		try 
+    		{
+        		InputStream stIn = new FileInputStream(args[0]);
+    			ruParser = new HySoft(stIn);
+    			ruParser.sUsedNow = stIn;
+    		} 
+    		catch(FileNotFoundException e) 
+    		{
+    			System.out.println("Hy-Rule 0.1:  File " + args[0] + " not found.");
+    			return;
+    		}
+		} 
+		else 
+		{	
+			ruParser = new HySoft(System.in);
+			ruParser.sUsedNow = System.in;		
+			System.out.println("\nPlease input your HyRule grammar\n");
+    	}
+    	
+    	//开始运行
+    	ruParser.logshow.ShowTime(InforType.Warn);
+    	
+    	//编译
+    	boolean bRun = false;
+    	do
+    	{
+    		//判断是否需要重新初始化，没有重启才判断同一流读新文件
+    		if(bRun && (null != ruParser.streamIn && ruParser.sUsedNow != ruParser.streamIn))
+    			ruParser.ReInit(ruParser.streamIn);
+    		else if(bRun && ruParser.bforceRestart)
+    			ruParser.jjtree.reset();
+
+    		//强制重新初始话只有启动编译后设置生效，生效一次
+    		ruParser.bforceRestart = false;
+    		ruParser.Compile();
+    		
+    		//已经运行
+    		bRun = true;
+    		
+    		//如果是运行状态开始运行
+    		if(!ruParser.bCompile && ruParser.bRunAfterC)
+                 ((SimpleNode)ruParser.jjtree.rootNode()).interpret(InterpreType.Run);
+    		
+    		//在调试状态下打开最后显示语法树时进行展示
+      	if(ruParser.bShowTreeAtEnd && ruParser.bDebug)
+      	{
+      		System.out.println("\n!<----------Begin dump hyrule tree--------->!");
+      		((SimpleNode)ruParser.jjtree.rootNode()).dump("");
+      	}
+      	
+      	//在调试状态下打开最后显示属性时进行展示
+      	if(ruParser.bShowMembers && ruParser.bDebug)
+      	{
+      		System.out.println("\n!<----------Begin dump hyrule member--------->!");
+      		((SimpleNode)ruParser.jjtree.rootNode()).dumpMember("");
+      	}
+      			
+			System.out.println("\nMain continue flag is " + ruParser.bContinue + ", once again flag is " + ruParser.bforceRestart);
+    	}
+    	while(ruParser.bContinue || ruParser.bforceRestart);
+
+    	/*
+    	 * true时编译状态只编译然后保存定义到库中
+    	 * false编译完后不保存到库而是直接运行
+    	 */
+    	if(ruParser.bCompile)
+    	{
+    		// TODO save功能
+    	}
+	}  
+}
+PARSER_END(HySoft)
+/*---------------------------------------*/
+//定义注释部分
+/*---------------------------------------*/
+MORE :
+{
+	"//" : IN_SINGLE_LINE_COMMENT
+|
+	<"/**" ~["/"]> { input_stream.backup(1); } : IN_FORMAL_COMMENT
+|
+	"/*" : IN_MULTI_LINE_COMMENT
+}
+
+<IN_SINGLE_LINE_COMMENT>
+SPECIAL_TOKEN :
+{
+	<SINGLE_LINE_COMMENT: "\n" | "\r" | "\r\n" > : DEFAULT
+}
+
+<IN_FORMAL_COMMENT>
+SPECIAL_TOKEN :
+{
+	<FORMAL_COMMENT: "*/" > : DEFAULT
+}
+
+<IN_MULTI_LINE_COMMENT>
+SPECIAL_TOKEN :
+{
+	<MULTI_LINE_COMMENT: "*/" > : DEFAULT
+}
+
+<IN_SINGLE_LINE_COMMENT,IN_FORMAL_COMMENT,IN_MULTI_LINE_COMMENT>
+MORE :
+{
+	< ~[] >
+}
+/*---------------------------------------*/
+/*忽略部分*/
+/*---------------------------------------*/
+SKIP :
+{
+  " "
+| "\t"
+| "\n"
+| "\r"
+| "\f"
+}
+/*---------------------------------------*/
+//定义调试关键字
+/*---------------------------------------*/
+/* 调试 */
+TOKEN :
+{
+  < DEBUG: "hy_debug" >
+| 
+  < SHOW: "hy_show" >
+}
+/*---------------------------------------*/
+//设置关键字
+/*---------------------------------------*/
+/* 设置开始 */
+TOKEN :
+{
+< RESTART: "hy_restart" >
+|
+< HYEOF: "hy_end" >
+|
+< SET: "hy_set" >
+}
+/*---------------------------------------*/
+//定义关键字
+/*---------------------------------------*/
+/* 数据类型 */
+TOKEN :
+{
+  < BOOLEAN: "bool" | "boolean" >
+| < DOUBLE: "double" >
+| < INT: "int" >
+| < CHAR: "char" >
+| < TRUE: "true" >
+| < FALSE: "false" >
+| < VOID: "void" >
+| < STRING: "string" >
+| < THIS: "this" >
+| < MAP: "map" >
+| < VECTOR: "vector" >
+| < NULL: "null" >
+}
+/*---------------------------------------*/
+/* 流程控制 */
+TOKEN :
+{
+  < IF: "if" >
+| < ELSE: "else" >
+| < FOR: "for" >
+| < OF: "of" >
+| < NOTIN: "!in" >
+| < IN: "in" >
+| < WHILE: "while" >
+| < BREAK: "break" >
+| < CONTINUE: "continue" >
+| < RETURN: "return" >
+| < RETURNTOC: "toClient:" >
+}
+/*---------------------------------------*/
+/* 定义关键字 */
+TOKEN :
+{
+  < LIBRARY: "lib" >
+| < DATA: "data" >
+| < FUNC: "funlib" >
+| < INCLUDE: "include">
+| < LOAD: "load" >
+| < END: "end" >
+}
+/*---------------------------------------*/
+/* 分隔符 */
+TOKEN :
+{
+  < LPAREN: "(" >
+| < RPAREN: ")" >
+| < LBRACE: "{" >
+| < RBRACE: "}" >
+| < LBRACKET: "[" >
+| < RBRACKET: "]" >
+| < SEMICOLON: ";" >
+| < COMMA: "," >
+| < DOT: "." >
+}
+/*---------------------------------------*/
+/* 操作符 */
+TOKEN :
+{
+  < ASSIGN: "=" >
+| < GT: ">" >
+| < LT: "<" >
+| < BANG: "!" >
+| < EQ: "==" >
+| < LE: "<=" >
+| < GE: ">=" >
+| < NE: "!=" >
+| < SC_OR: "||" >
+| < SC_AND: "&&" >
+| < INCR: "++" >
+| < DECR: "--" >
+| < PLUS: "+" >
+| < MINUS: "-" >
+| < STAR: "*" >
+| < SLASH: "/" >
+| < REM: "%" >
+| < PLUSASSIGN: "+=" >
+| < MINUSASSIGN: "-=" >
+| < STARASSIGN: "*=" >
+| < SLASHASSIGN: "/=" >
+| < REMASSIGN: "%=" >
+}
+/*---------------------------------------*/
+/* 引用术语及术语定义 */
+/*---------------------------------------*/
+TOKEN :
+{
+  <DECIMAL_LITERAL: ["1"-"9"] (["0"-"9"])* >
+| < INTEGER_LITERAL:
+        <DECIMAL_LITERAL> (["l","L"])?
+      | <HEX_LITERAL> (["l","L"])?
+      | <OCTAL_LITERAL> (["l","L"])?
+  >
+| 
+  < #HEX_LITERAL: "0" ["x","X"] (["0"-"9","a"-"f","A"-"F"])+ >
+|
+  < #OCTAL_LITERAL: "0" (["0"-"7"])* >
+|
+  < FLOATING_POINT_LITERAL:
+        (["0"-"9"])+ "." (["0"-"9"])* (<EXPONENT>)? (["f","F","d","D"])?
+      | "." (["0"-"9"])+ (<EXPONENT>)? (["f","F","d","D"])?
+      | (["0"-"9"])+ <EXPONENT> (["f","F","d","D"])?
+      | (["0"-"9"])+ (<EXPONENT>)? ["f","F","d","D"]
+  >
+|
+  < #EXPONENT: ["e","E"] (["+","-"])? (["0"-"9"])+ >
+|
+  < CHARACTER_LITERAL:
+      "'"
+      (   (~["'","\\","\n","\r"])
+        | ("\\"
+            ( ["n","t","b","r","f","\\","'","\""]
+            | ["0"-"7"] ( ["0"-"7"] )?
+            | ["0"-"3"] ["0"-"7"] ["0"-"7"]
+            )
+          )
+      )
+      "'"
+  >
+|
+  < STRING_LITERAL:
+      "\""
+      (   (~["\"","\\","\n","\r"])
+        | ("\\"
+            ( ["n","t","b","r","f","\\","'","\""]
+            | ["0"-"7"] ( ["0"-"7"] )?
+            | ["0"-"3"] ["0"-"7"] ["0"-"7"]
+            )
+          )
+      )*
+      "\""
+  >
+}
+/*---------------------------------------*/
+/* 标识符定义 */
+TOKEN :
+{
+  < IDENTIFIER: <LETTER> (<LETTER>|<DIGIT>)* >
+|
+  < #LETTER:
+      [
+       "\u0024",
+       "\u0041"-"\u005a",
+       "\u005f",
+       "\u0061"-"\u007a",
+       "\u00c0"-"\u00d6",
+       "\u00d8"-"\u00f6",
+       "\u00f8"-"\u00ff",
+       "\u0100"-"\u1fff",
+       "\u3040"-"\u318f",
+       "\u3300"-"\u337f",
+       "\u3400"-"\u3d2d",
+       "\u4e00"-"\u9fff",
+       "\uf900"-"\ufaff"
+      ]
+  >
+|
+  < #DIGIT:
+      [
+       "\u0030"-"\u0039",
+       "\u0660"-"\u0669",
+       "\u06f0"-"\u06f9",
+       "\u0966"-"\u096f",
+       "\u09e6"-"\u09ef",
+       "\u0a66"-"\u0a6f",
+       "\u0ae6"-"\u0aef",
+       "\u0b66"-"\u0b6f",
+       "\u0be7"-"\u0bef",
+       "\u0c66"-"\u0c6f",
+       "\u0ce6"-"\u0cef",
+       "\u0d66"-"\u0d6f",
+       "\u0e50"-"\u0e59",
+       "\u0ed0"-"\u0ed9",
+       "\u1040"-"\u1049"
+      ]
+  >
+}
+/*---------------------------------------*/
+//语法规范定义部分
+/*---------------------------------------*/
+/* Compile 启动主函数 
+ * 在编辑状态定义的数据和规则将进行保留，后期如果需要可以通过load加载
+ * 运行状态添加的数据和规则定义是临时的，运行结束将被删除，不能通过load加载
+ * */
+void Compile() :
+{
+	//是否编辑状态还是运行状态，true编辑状态
+	Boolean bCompleFlag = new Boolean(true);	
+	jjtThis.setLogShow(logshow);
+}
+{		
+	//无论什么时间<EOF>可以结束
+	(
+		<EOF> 
+		{	
+			bContinue = false;	
+			System.out.println("\nEOF Continue flag is " + bContinue);
+		}
+	)
+	|
+	(
+		//设置debug信息 //展示内容
+		(DebugStatement() | ShowStatement() | SetStatement())*
+		(
+			/*编辑语法*/
+			LibraryDeclare(bCompleFlag)
+			{	
+				jjtThis.bCompile = true;
+				bCompile = true;
+			}
+			|
+			/*
+			 * 运行状态也可以添加临时定义
+			 * 运行状态可以同时加载多个规则库
+			 * */
+			LoadDeclare(bCompleFlag)
+			{	
+				jjtThis.bCompile = false;	
+				bCompile = false;
+			}
+			|
+			error_skipto(SEMICOLON,EOF,"HyRule not matched occured: ")
+		)
+		[ RestartStatement() | SetStatement()]
+		(
+			(<HYEOF> <SEMICOLON>)
+			| 
+			(
+				<EOF> 
+				{	
+					bContinue = false;	
+					System.out.println("\nEOF Continue flag is " + bContinue);
+				}
+			)
+		)
+	)
+}
+/*---------------------------------------*/
+//设置语法
+/*---------------------------------------*/
+//Restart命令语法
+void RestartStatement() #void:
+{
+	Token start;
+}
+{
+	<RESTART> start = <IDENTIFIER> <SEMICOLON>
+	{
+		if(start.image.equalsIgnoreCase("on"))
+	 	{	
+	 		bContinue = true;		
+	 		System.out.println("\nRestart to continue flag is " + bContinue);
+	 	}
+		else if(start.image.equalsIgnoreCase("off"))
+		{
+			bContinue = false;		
+	 		System.out.println("\nRestart to continue flag is " + bContinue);
+		}
+		else if(start.image.equalsIgnoreCase("conew"))
+		{
+			bforceRestart = true;
+	 		System.out.println("\nRestart to continue a new one once flag is " + bforceRestart);
+		}
+	}
+}
+//Set命令语法
+void SetStatement() #void:
+{
+	Token opt, choice;
+}
+{
+	<SET> opt = <IDENTIFIER> choice = <IDENTIFIER> <SEMICOLON>
+	{
+		if(opt.image.equalsIgnoreCase("log"))
+	 	{	
+			if(choice.image.equalsIgnoreCase("on"))
+		 	{	
+				LogOrShow.setbWriteLog(true);		
+		 		System.out.println("\nHyRule starts to write log!");
+		 	}
+			else if(choice.image.equalsIgnoreCase("off"))
+			{
+				LogOrShow.setbWriteLog(false);	
+		 		System.out.println("\nHyRule stops to write log!");
+			}		
+			else
+				System.out.println("\nHy_set log wrong : " + choice.image);
+	 	}
+		else if(opt.image.equalsIgnoreCase("loglv"))
+		{
+			if(choice.image.equalsIgnoreCase("debug"))
+		 	{	
+				LogOrShow.setInfoLevel(InforType.Debug);		
+		 		System.out.println("\nHyRule sets log level to debug!");
+		 	}
+			else if(choice.image.equalsIgnoreCase("infor"))
+			{	
+				LogOrShow.setInfoLevel(InforType.Infor);		
+		 		System.out.println("\nHyRule sets log level to infor!");
+			}
+			else if(choice.image.equalsIgnoreCase("warn"))
+			{	
+				LogOrShow.setInfoLevel(InforType.Warn);		
+		 		System.out.println("\nHyRule sets log level to warn!");
+			}	
+			else if(choice.image.equalsIgnoreCase("erro"))
+			{	
+				LogOrShow.setInfoLevel(InforType.Error);		
+		 		System.out.println("\nHyRule sets log level to erro!");
+			}			
+			else
+				System.out.println("\nHy_set loglv wrong : " + choice.image);
+		}
+	}
+}
+/*---------------------------------------*/
+//调试语法
+/*---------------------------------------*/
+//debug语法
+void DebugStatement() #void:
+{
+	Token debugT;
+}
+{
+	<DEBUG> debugT = <IDENTIFIER> <SEMICOLON>
+	{
+		if(debugT.image.equalsIgnoreCase("on"))
+		{
+			bDebug = true;
+			LogOrShow.setDebug(true);
+			HyRuleNode.setDebug(true);
+			System.out.println("\nHyRule debug state on!");
+		}
+		else if(debugT.image.equalsIgnoreCase("off"))
+		{
+			bDebug = false;
+			LogOrShow.setDebug(false);
+			HyRuleNode.setDebug(false);
+			System.out.println("\nHyRule debug state off!");
+		}
+		else if(debugT.image.equalsIgnoreCase("runon"))
+		{
+			bRunAfterC = true;
+			System.out.println("\nHyRule run state on!");
+		}
+		else if(debugT.image.equalsIgnoreCase("runoff"))
+		{
+			bRunAfterC = false;
+			System.out.println("\nHyRule run state off!");
+		}
+	}
+}
+//show语法
+void ShowStatement() #void:
+{
+	Token debugT;
+}
+{
+	<SHOW> debugT = <IDENTIFIER> <SEMICOLON>
+	{
+		if(debugT.image.equalsIgnoreCase("debug"))
+			System.out.println("\nHyRule debug flag is " + bDebug);
+		else if(debugT.image.equalsIgnoreCase("ends") && bDebug)
+		{
+			this.bShowTreeAtEnd = true;
+			System.out.println("\nHyRule show AST at end on!");
+		}
+		else if(debugT.image.equalsIgnoreCase("endo"))
+		{
+			System.out.println("\nHyRule show AST at end off!");
+			this.bShowTreeAtEnd = false;
+		}
+		else if(debugT.image.equalsIgnoreCase("mems"))
+		{
+			System.out.println("\nHyRule show members on!");
+			this.bShowMembers = true;
+		}
+		else if(debugT.image.equalsIgnoreCase("memo"))
+		{
+			System.out.println("\nHyRule show members off!");
+			this.bShowMembers = false;
+		}
+		else if(debugT.image.equalsIgnoreCase("tabs"))
+		{
+			System.out.println("\nHyRule show systab on!");
+			this.bShowSystab = true;
+		}
+		else if(debugT.image.equalsIgnoreCase("tabo"))
+		{
+			System.out.println("\nHyRule show systab off!");
+			this.bShowSystab = false;
+		}
+		else
+			System.out.println("\nHyRule state or parameter for hy_show wrong!");
+	}
+}
+//定义编辑定义
+void LibraryDeclare(Boolean bComple):
+{ 
+	Token ID; 
+	bComple = true;
+	String strInclude = new String();
+	jjtThis.setParser(this);	
+	jjtThis.setLogShow(logshow);
+	
+	DataTAB[] result = jjtThis.IniTabAndStackForLoadOrLib(this.sysStack,"LibDeclare");
+	g_DataDefine = result[1];
+	g_Systab = result[0];
+	
+	this.liborLoadFundef = jjtThis.IniLib();
+}
+{
+	(
+		/*编辑语法*/
+		<LIBRARY> ID = <IDENTIFIER> <LBRACE>
+		{	jjtThis.setStrLibraryName(ID.image);	}
+		(
+			strInclude = IncludeDeclare()
+			{
+				jjtThis.AddInclude(strInclude);
+			}
+		)*
+		(	
+			(
+				VarDeclaration(bComple)
+				|
+				FuncState(bComple)
+				//设置debug信息
+				|
+				DebugStatement()
+				|
+				//展示内容
+				ShowStatement()
+				|
+				SetStatement()
+			)
+		)*
+		<RBRACE>
+		(
+			//设置debug信息
+			DebugStatement()
+			|
+			//展示内容
+			ShowStatement()
+		)*
+	)
+	{
+		g_Systab = null;
+		liborLoadFundef = null;
+	}
+}
+//运行态定义
+void LoadDeclare(Boolean bComple):
+{ 
+	String libs = new String();
+	bComple = false; 
+	jjtThis.setParser(this);	
+	jjtThis.setLogShow(logshow);
+	DataTAB[] result = jjtThis.IniTabAndStackForLoadOrLib(this.sysStack,"LoadDeclare");
+	g_DataDefine = result[1];
+	g_Systab = result[0];
+	
+	liborLoadFundef = jjtThis.IniLib();
+}
+{
+	(
+		/*
+		 * 运行状态也可以添加临时定义
+		 * 运行状态可以同时加载多个规则库
+		 * */
+		<LOAD> [ libs = LibNames()]
+		{	
+			if(!libs.isEmpty())
+				jjtThis.setStrLibrays(libs);	
+		}
+		<LBRACE>
+		(
+			//接受解释
+			(
+				FuncState(bComple)
+				|
+				//VarDeclaration在statement中包括
+				Statement(bComple)		
+				//设置debug信息
+				|
+				DebugStatement()
+				|
+				//展示内容
+				ShowStatement()
+				|
+				SetStatement()
+			)
+		)*
+		[Return2Client()]
+		<RBRACE>
+		[<END> <SEMICOLON>]
+		(
+			//设置debug信息
+			DebugStatement()
+			|
+			//展示内容
+			ShowStatement()
+		)*
+	)
+	{
+		g_Systab = null;
+		liborLoadFundef = null;
+	}
+}
+/*---------------------------------------*/
+//规则包含其他规则语法
+String IncludeDeclare() #void:
+{
+	Token id = null;
+}
+{
+	(<INCLUDE> id = <IDENTIFIER> <SEMICOLON>)
+	{
+		return id.image;
+	}
+}
+/*---------------------------------------*/
+//定义名字
+String Name() #void:
+{
+	Token nameID,mID;
+	StringBuilder nameBuild = new StringBuilder();
+}
+{
+	( 
+		nameID = <IDENTIFIER> 
+		{
+			nameBuild.append(nameID.image);
+		}
+		(
+			<DOT> mID = <IDENTIFIER>
+			{
+				nameBuild.append(".");
+				nameBuild.append(mID.image);
+			}
+		)*
+	)
+	{
+		return nameBuild.toString();
+	}
+}
+//定义名字
+String LibNames() #void:
+{
+	Token libN = null, libOtherN = null;
+	StringBuilder nameBuild = new StringBuilder();
+}
+{
+	libN = <IDENTIFIER> 
+	{
+		nameBuild.append(libN.image);
+	}
+	(
+		<COMMA> libOtherN = <IDENTIFIER>
+		{
+			nameBuild.append(",");
+			nameBuild.append(libOtherN.image);
+		}
+	)*
+	{
+		return nameBuild.toString(); 
+	}
+}
+/*---------------------------------------*/
+//定义变量声明语法
+//仅为变量lookahead使用
+void VarDeclLookAhead() #void:
+{}
+{
+	(Name() | <STRING> | <DOUBLE> | <BOOLEAN> | <CHAR>| <INT> | <VECTOR>) <IDENTIFIER>
+}
+/*
+ * 变量声明包括赋值
+ * char数组本质就是string，所以不在定义char []
+ */
+void VarDeclaration(boolean bComple) #void:
+{}
+{
+	IntVar() | BoolVar() | CharVar() | DoubleVar() | StringVar() | ObjectVar() | VecVar()
+}
+//数组声明
+String ArrayStatement() #void:
+{
+	Token name;
+	StringBuilder nB = new StringBuilder();	
+}
+{
+	<LBRACKET> name = <DECIMAL_LITERAL> <RBRACKET>
+	{
+		nB.append(name.image);
+		return nB.toString();
+	}
+}
+/*---------------------------------------*/
+//vector变量定义
+void VecVar() :
+{
+	Token intName;
+	StringBuilder infBuilder = null;
+	String strVec = "";
+
+	jjtThis.setLogShow(logshow);
+	jjtThis.setTabAndStack(this.g_Systab,this.func_Systab,this.function_Systab,this.sysStack,g_DataDefine);	
+}
+{
+	<VECTOR> 
+	//vec数组
+	intName = <IDENTIFIER> strVec = VecDeclare()
+	{
+		//首先处理数组标示
+		infBuilder = new StringBuilder();
+		infBuilder.append(intName.image);
+		infBuilder.append(strVec);
+		//添加到节点
+		jjtThis.AddIntItem(infBuilder.toString(),"");
+		jjtThis.addToVarName(infBuilder.toString(),true);
+		intName = null;
+		strVec = "";
+	}
+	//附加int数组
+	(
+		<COMMA>
+		intName = <IDENTIFIER> strVec = VecDeclare()
+		{
+			//首先处理数组标示
+			infBuilder = new StringBuilder();
+			infBuilder.append(intName.image);
+			infBuilder.append(strVec);
+			//添加到节点
+			jjtThis.AddIntItem(infBuilder.toString(),"");
+			jjtThis.addToVarName(infBuilder.toString(),true);
+			intName = null;
+			strVec = "";
+		}
+	)*
+	<SEMICOLON>
+}
+//vec 声明体
+String VecDeclare() #void:
+{
+	String strVec = null;
+}
+{
+	[
+		 <ASSIGN> 
+		 (
+		 	LOOKAHEAD(Name() <LPAREN>) CallFuncStatement() | ConditionalExpression()
+		 )
+		 {
+			 strVec = new String();
+		 }
+	]
+	{
+		return strVec;
+	}
+}
+/*---------------------------------------*/
+//int变量定义
+void IntVar() :
+{
+	Token intName;
+
+	//[0]数组信息 [1]赋值信息
+	String ArrayInfor[];
+	StringBuilder infBuilder = null;
+
+	jjtThis.setLogShow(logshow);
+	jjtThis.setTabAndStack(this.g_Systab,this.func_Systab,this.function_Systab,this.sysStack,g_DataDefine);	
+}
+{
+  	<INT> 
+  	//int数组
+  	intName = <IDENTIFIER> ArrayInfor = IntDeclare()
+  	{
+  		//首先处理数组标示
+  		infBuilder = new StringBuilder();
+  		infBuilder.append(intName.image);
+  		if(ArrayInfor != null && ArrayInfor[0] != null && !ArrayInfor[0].isEmpty())
+  			infBuilder.append(ArrayInfor[0]);
+  		//添加到节点
+  		jjtThis.AddIntItem(infBuilder.toString(),ArrayInfor[1]);
+  		if(ArrayInfor[2].equalsIgnoreCase("true"))
+  			jjtThis.addToVarName(infBuilder.toString(),true);
+  		else
+  	  		jjtThis.addToVarName(infBuilder.toString(),false);
+  		intName = null;
+  		ArrayInfor = null;
+  	}
+  	//附加int数组
+  	(
+		<COMMA>
+		intName = <IDENTIFIER> ArrayInfor = IntDeclare()
+		{
+	  		//首先处理数组标示
+			infBuilder = new StringBuilder();
+	  		infBuilder.append(intName.image);
+	  		if(ArrayInfor != null && ArrayInfor[0] != null && !ArrayInfor[0].isEmpty())
+	  			infBuilder.append(ArrayInfor[0]);
+	  		//添加到节点
+	  		jjtThis.AddIntItem(infBuilder.toString(),ArrayInfor[1]);
+	  		if(ArrayInfor[2].equalsIgnoreCase("true"))
+	  			jjtThis.addToVarName(infBuilder.toString(),true);
+	  		else
+	  	  		jjtThis.addToVarName(infBuilder.toString(),false);
+	  		ArrayInfor = null;	
+	  		intName = null;
+		}
+	)*
+	<SEMICOLON>
+}
+//int 声明体
+//[0]数组信息 [1]赋值信息 [3]是否需要后续计算
+String[] IntDeclare() #void:
+{
+	//数组下表
+	String arrIndex = new String(),arrIndexEx = new String();
+	//赋值
+	String strValue = null;
+	Token Value = null;
+	StringBuilder ValueBuilder = null;
+	StringBuilder arrindexb = null;
+	boolean bWaitForCalculate = false;
+}
+{
+	(
+		//int数组
+		(	
+			arrIndex = ArrayStatement()  
+			{
+				//数组下标
+				arrindexb = new StringBuilder();
+				if(arrIndex != null && !arrIndex.isEmpty())
+				{
+					arrindexb.append(",");
+					arrindexb.append(arrIndex);
+				}
+			}
+			(
+				arrIndexEx = ArrayStatement()
+				{
+					if(arrindexb != null && !arrIndex.isEmpty())
+					{
+						arrindexb.append(",");
+						arrindexb.append(arrIndexEx);
+					}
+				}
+			)* 
+	  		[
+			 	<ASSIGN>
+			 	{ValueBuilder = new StringBuilder();}
+	 		 	(
+	 		 		( LOOKAHEAD(Name() <LPAREN>) strValue = CallFuncStatement() | strValue = ConditionalExpression())
+	 		 		{ 
+	 		 			ValueBuilder.append(strValue);
+		 		 		bWaitForCalculate = true;
+		 		 		strValue = null;
+	 		 		}
+	 		 		|
+	 		 		(
+	 		 			<LBRACE> (Value = <DECIMAL_LITERAL> | Value = <INTEGER_LITERAL>)
+	 		 			{
+	 		 				ValueBuilder.append(Value.image);
+	 		 				Value = null;
+	 		 				bWaitForCalculate = false;
+	 		 			}
+			 			(
+			 				<COMMA> (Value = <DECIMAL_LITERAL> | Value = <INTEGER_LITERAL>)
+			 				{
+			 					if(Value.image != null && !Value.image.isEmpty())
+			 					{
+			 						ValueBuilder.append(",");
+			 						ValueBuilder.append(Value.image);
+			 					}
+		 		 				Value = null;
+		 		 			}
+			 			)* 
+			 			<RBRACE>
+	 		 		)
+	 		 	)
+			] 
+	  	)
+		|
+		//int ConditionalExpression已经包括了<DECIMAL_LITERAL> | <INTEGER_LITERAL>
+		[
+		 	<ASSIGN> 
+		 	( 
+		 		LOOKAHEAD(<DECIMAL_LITERAL> | <INTEGER_LITERAL>) (Value = <DECIMAL_LITERAL> | Value = <INTEGER_LITERAL>)
+		 		| 
+		 		LOOKAHEAD(Name() <LPAREN>) strValue = CallFuncStatement()  
+		 		| strValue = ConditionalExpression()
+		 	)
+		]
+		{ 
+			ValueBuilder = new StringBuilder();
+			if(Value != null)
+			{
+				bWaitForCalculate = false;
+				ValueBuilder.append(Value.image);
+			 	Value = null;
+			}
+			else if(null != strValue)
+			{
+				ValueBuilder.append(strValue);
+				bWaitForCalculate = true;
+			 	strValue = null;
+			}
+		}
+	)
+	{  
+		String[] infor = new String[3];
+		if(null != arrindexb)
+			infor[0] = arrindexb.toString();
+		else
+			infor[0] = new String();
+		
+		//数组赋值
+		if(ValueBuilder != null)
+			infor[1] = ValueBuilder.toString();
+		else
+			infor[1] = new String();
+		
+		infor[2] = Boolean.toString(bWaitForCalculate);
+		
+		return infor;
+	}
+}
+/*---------------------------------------*/
+/*
+ * char变量定义
+ * 由于存在string所以不在定义char数组
+ */
+void CharVar() :
+{
+	Token charName = null,charValue = null;
+	String strValue = null;
+
+	jjtThis.setLogShow(logshow);
+	jjtThis.setTabAndStack(this.g_Systab,this.func_Systab,this.function_Systab,this.sysStack,g_DataDefine);	
+}
+{
+	<CHAR>
+	charName = <IDENTIFIER> [<ASSIGN> 
+								(LOOKAHEAD(Name() <LPAREN>) strValue = CallFuncStatement() 
+								| LOOKAHEAD(<CHARACTER_LITERAL>) charValue = <CHARACTER_LITERAL>
+								| strValue = ConditionalExpression()
+								)
+							] 		
+	{
+		//添加到节点
+		if(charValue != null)
+		{
+			jjtThis.AddIntItem(charName.image,trimeQM(charValue.image));
+			jjtThis.addToVarName(charName.image,false);
+			charValue = null;
+		}
+		else if(null != strValue)
+		{
+			jjtThis.AddIntItem(charName.image,strValue);
+			strValue = new String();
+			jjtThis.addToVarName(charName.image,true);
+			strValue = null;
+		}
+		else
+			jjtThis.addToVarName(charName.image,false);
+  		charName = null;	
+	}
+	(
+		<COMMA>
+		charName = <IDENTIFIER> [<ASSIGN> 
+									(LOOKAHEAD(Name() <LPAREN>) strValue = CallFuncStatement()  
+									| LOOKAHEAD(<CHARACTER_LITERAL>) charValue = <CHARACTER_LITERAL>
+									| strValue = ConditionalExpression()
+									)
+								]
+		{
+			//添加到节点
+			if(charValue != null)
+			{
+				jjtThis.AddIntItem(charName.image,trimeQM(charValue.image));
+				jjtThis.addToVarName(charName.image,false);
+				charValue = null;
+			}
+			else if(null != strValue)
+			{
+				jjtThis.AddIntItem(charName.image,strValue);
+				strValue = new String();
+				jjtThis.addToVarName(charName.image,true);
+				strValue = null;
+			}
+			else
+				jjtThis.addToVarName(charName.image,false);
+	  		charName = null;
+		}
+	)* 
+	<SEMICOLON>
+}
+/*---------------------------------------*/
+//bool变量定义
+void BoolVar() :
+{
+	Token bName;
+
+	//[0]数组信息 [1]赋值信息
+	String ArrayInfor[];
+	StringBuilder infBuilder = null;
+
+	jjtThis.setLogShow(logshow);
+	jjtThis.setTabAndStack(this.g_Systab,this.func_Systab,this.function_Systab,this.sysStack,g_DataDefine);	
+}
+{
+  	<BOOLEAN> 
+  	//bool数组
+  	bName = <IDENTIFIER> ArrayInfor = BoolDeclare()
+  	{
+  		//首先处理数组标示
+  		infBuilder = new StringBuilder();
+  		infBuilder.append(bName.image);
+  		if(ArrayInfor != null && ArrayInfor[0] != null && !ArrayInfor[0].isEmpty())
+  			infBuilder.append(ArrayInfor[0]);
+  		//添加到节点
+  		jjtThis.AddIntItem(infBuilder.toString(),ArrayInfor[1]);
+  		if(ArrayInfor[2].equalsIgnoreCase("true"))
+  			jjtThis.addToVarName(infBuilder.toString(),true);
+  		else
+  	  		jjtThis.addToVarName(infBuilder.toString(),false);
+  		bName = null;
+  		ArrayInfor = null;
+  	}
+  	//附加bool数组
+  	(
+		<COMMA>
+		bName = <IDENTIFIER> ArrayInfor = BoolDeclare()
+		{
+	  		//首先处理数组标示
+			infBuilder = new StringBuilder();
+	  		infBuilder.append(bName.image);
+	  		if(ArrayInfor != null && ArrayInfor[0] != null && !ArrayInfor[0].isEmpty())
+	  			infBuilder.append(ArrayInfor[0]);
+	  		//添加到节点
+	  		jjtThis.AddIntItem(infBuilder.toString(),ArrayInfor[1]);
+	  		if(ArrayInfor[2].equalsIgnoreCase("true"))
+	  			jjtThis.addToVarName(infBuilder.toString(),true);
+	  		else
+	  	  		jjtThis.addToVarName(infBuilder.toString(),false);
+	  		ArrayInfor = null;
+	  		bName = null;
+		}
+	)*
+	<SEMICOLON>
+}
+//bool 声明体
+//[0]数组信息 [1]赋值信息 [3]是否需要后续计算
+String[] BoolDeclare() #void:
+{
+	//数组下表
+	String arrIndex = new String(),arrIndexEx = new String();
+	//赋值
+	String strValue = null;
+	Token Value = null;
+	StringBuilder ValueBuilder = null;
+	StringBuilder arrindexb = null;
+	boolean bWaitForCalculate = false;
+}
+{
+	(
+		//bool数组
+		(
+			arrIndex = ArrayStatement() 
+			{
+				//数组下标
+				arrindexb = new StringBuilder();
+				if(arrIndex != null && !arrIndex.isEmpty())
+				{
+					arrindexb.append(",");
+					arrindexb.append(arrIndex);
+				}
+			}
+			(
+				arrIndexEx = ArrayStatement()
+				{
+					if(arrindexb != null && !arrIndex.isEmpty())
+					{
+						arrindexb.append(",");
+						arrindexb.append(arrIndexEx);
+					}
+				}
+			)* 
+			[
+			 	<ASSIGN>
+			 	{ValueBuilder = new StringBuilder();}
+			 	(
+			 		( LOOKAHEAD(Name() <LPAREN>) strValue = CallFuncStatement() | strValue = ConditionalExpression())
+		 		 	{ 
+		 		 		ValueBuilder.append(strValue);
+		 		 		bWaitForCalculate = true;
+		 		 		strValue = null;
+		 		 	}
+				 	|
+			 		(
+			 			<LBRACE> (Value = <TRUE> | Value = <FALSE>) 
+			 			{
+		 		 				ValueBuilder.append(Value.image);
+		 		 				Value = null;
+		 		 				bWaitForCalculate = false;
+		 		 		}
+			 			(
+			 				<COMMA> (Value = <TRUE> | Value = <FALSE>)
+			 				{
+				 				if(Value.image != null && !Value.image.isEmpty())
+				 				{
+				 					ValueBuilder.append(",");
+				 					ValueBuilder.append(Value.image);
+				 				}
+			 		 			Value = null;
+			 		 		}
+			 			)* 
+			 			<RBRACE>
+			 		)
+			 	)
+			] 
+		)
+		|
+		//bool
+		[<ASSIGN> ( LOOKAHEAD(Name() <LPAREN>) strValue = CallFuncStatement()
+				    | LOOKAHEAD(<TRUE> | <FALSE>) (Value = <TRUE> | Value = <FALSE>)
+					| strValue = ConditionalExpression()
+				  )
+		]
+		{ 
+			ValueBuilder = new StringBuilder();
+			if(Value != null)
+			{
+				ValueBuilder.append(Value.image);
+				bWaitForCalculate = false;
+				Value = null;
+			}
+			else if(null != strValue)
+			{
+				ValueBuilder.append(strValue);
+				bWaitForCalculate = true;
+				strValue = null;
+			}
+		}
+	)
+	{  
+		String[] infor = new String[3];
+		if(null != arrindexb)
+			infor[0] = arrindexb.toString();
+		else
+			infor[0] = new String();
+		
+		//数组赋值
+		if(ValueBuilder != null)
+			infor[1] = ValueBuilder.toString();
+		else
+			infor[1] = new String();
+		
+		infor[2] = Boolean.toString(bWaitForCalculate);
+		
+		return infor;
+	}
+}
+/*---------------------------------------*/
+//double变量定义
+void DoubleVar() :
+{
+	Token dName;
+
+	//[0]数组信息 [1]赋值信息
+	String ArrayInfor[];
+	StringBuilder infBuilder = null;
+
+	jjtThis.setLogShow(logshow);
+	jjtThis.setTabAndStack(this.g_Systab,this.func_Systab,this.function_Systab,this.sysStack,g_DataDefine);	
+}
+{
+  	<DOUBLE> 
+  	//double数组
+  	dName = <IDENTIFIER> ArrayInfor = DoubleDeclare()
+  	{
+  		//首先处理数组标示
+  		infBuilder = new StringBuilder();
+  		infBuilder.append(dName.image);
+  		if(ArrayInfor != null && ArrayInfor[0] != null && !ArrayInfor[0].isEmpty())
+  			infBuilder.append(ArrayInfor[0]);
+  		//添加到节点
+  		jjtThis.AddIntItem(infBuilder.toString(),ArrayInfor[1]);
+  		if(ArrayInfor[2].equalsIgnoreCase("true"))
+  			jjtThis.addToVarName(infBuilder.toString(),true);
+  		else
+  	  		jjtThis.addToVarName(infBuilder.toString(),false);
+  		dName = null;
+  		ArrayInfor = null;
+  	}
+  	//附加double数组
+  	(
+		<COMMA>
+		dName = <IDENTIFIER> ArrayInfor = DoubleDeclare()
+		{
+	  		//首先处理数组标示
+			infBuilder = new StringBuilder();
+	  		infBuilder.append(dName.image);
+	  		if(ArrayInfor != null && ArrayInfor[0] != null && !ArrayInfor[0].isEmpty())
+	  			infBuilder.append(ArrayInfor[0]);
+	  		//添加到节点
+	  		jjtThis.AddIntItem(infBuilder.toString(),ArrayInfor[1]);
+	  		if(ArrayInfor[2].equalsIgnoreCase("true"))
+	  			jjtThis.addToVarName(infBuilder.toString(),true);
+	  		else
+	  	  		jjtThis.addToVarName(infBuilder.toString(),false);
+	  		dName = null;	  		
+	  		ArrayInfor = null;
+		}
+	)*
+	<SEMICOLON>
+}
+//double 声明体
+//[0]数组信息 [1]赋值信息 [3]是否需要后续计算
+String[] DoubleDeclare() #void:
+{
+	//数组下表
+	String arrIndex = new String(),arrIndexEx = new String();
+	//赋值
+	String strValue = null;
+	Token Value = null;
+	StringBuilder ValueBuilder = null;
+	StringBuilder arrindexb = null;
+	boolean bWaitForCalculate = false;
+}
+{
+	(
+		//double数组
+		(
+			arrIndex = ArrayStatement() 
+			{
+				//数组下标
+				arrindexb = new StringBuilder();
+				if(arrIndex != null && !arrIndex.isEmpty())
+				{
+					arrindexb.append(",");
+					arrindexb.append(arrIndex);
+				}
+			}
+			(
+				arrIndexEx = ArrayStatement()
+				{
+					if(arrindexb != null && !arrIndex.isEmpty())
+					{
+						arrindexb.append(",");
+						arrindexb.append(arrIndexEx);
+					}
+				}
+			)* 
+			[
+			 	<ASSIGN>
+			 	{ValueBuilder = new StringBuilder();}
+			 	(
+			 		( LOOKAHEAD(Name() <LPAREN>) strValue = CallFuncStatement() | strValue = ConditionalExpression())
+		 		 	{ 
+		 		 		ValueBuilder.append(strValue);
+		 		 		bWaitForCalculate = true;
+		 		 		strValue = null;
+		 		 	}
+				 	|
+			 		(
+			 			<LBRACE> Value = <FLOATING_POINT_LITERAL> 
+			 			{
+	 		 				ValueBuilder.append(Value.image);
+	 		 				Value = null;
+	 		 				bWaitForCalculate = false;
+	 		 			}
+			 			(
+			 				<COMMA> Value = <FLOATING_POINT_LITERAL>
+			 				{
+			 					if(Value.image != null && !Value.image.isEmpty())
+			 					{
+			 						ValueBuilder.append(",");
+			 						ValueBuilder.append(Value.image);
+			 					}
+		 		 				Value = null;
+		 		 			}
+			 			)* 
+			 			<RBRACE>
+			 		)
+			 	)
+			] 
+		)
+		|
+		//double
+		[
+		 	<ASSIGN> 
+		 	(
+		 		LOOKAHEAD(<FLOATING_POINT_LITERAL>) Value = <FLOATING_POINT_LITERAL>
+		 		| 
+		 		LOOKAHEAD(Name() <LPAREN>) strValue = CallFuncStatement()  
+		 		| strValue = ConditionalExpression()
+		 	)
+		]
+		{ 
+			ValueBuilder = new StringBuilder();
+			if(Value != null)
+			{
+				ValueBuilder.append(Value.image);
+				bWaitForCalculate = false;
+				Value = null;
+			}
+			else if(null != strValue)
+			{
+				ValueBuilder.append(strValue);
+				bWaitForCalculate = true;
+				strValue = null;
+			}
+		}
+	)
+	{  
+		String[] infor = new String[3];
+		if(null != arrindexb)
+			infor[0] = arrindexb.toString();
+		else
+			infor[0] = new String();
+		
+		//数组赋值
+		if(ValueBuilder != null)
+			infor[1] = ValueBuilder.toString();
+		else
+			infor[1] = new String();
+		
+		infor[2] = Boolean.toString(bWaitForCalculate);
+		
+		return infor;
+	}
+}
+/*---------------------------------------*/
+//String变量定义
+void StringVar() :
+{
+	Token intName;
+
+	//[0]数组信息 [1]赋值信息
+	String ArrayInfor[];
+	StringBuilder infBuilder = null;
+
+	jjtThis.setLogShow(logshow);
+	jjtThis.setTabAndStack(this.g_Systab,this.func_Systab,this.function_Systab,this.sysStack,g_DataDefine);	
+}
+{
+  	<STRING>  
+  	//String数组
+  	intName = <IDENTIFIER>  ArrayInfor = StringDeclare()
+  	{
+  		//首先处理数组标示
+  		infBuilder = new StringBuilder();
+  		infBuilder.append(intName.image);
+  		if(ArrayInfor != null && ArrayInfor[0] != null && !ArrayInfor[0].isEmpty())
+  			infBuilder.append(ArrayInfor[0]);
+  		//添加到节点
+  		jjtThis.AddIntItem(infBuilder.toString(),ArrayInfor[1]);
+  		if(ArrayInfor[2].equalsIgnoreCase("true"))
+  			jjtThis.addToVarName(infBuilder.toString(),true);
+  		else
+  	  		jjtThis.addToVarName(infBuilder.toString(),false);
+  		intName = null;
+  		ArrayInfor = null;
+  	}
+  	//附加String数组
+  	(
+		<COMMA>
+		intName = <IDENTIFIER>  ArrayInfor = StringDeclare()
+		{
+	  		//首先处理数组标示
+			infBuilder = new StringBuilder();
+	  		infBuilder.append(intName.image);
+	  		if(ArrayInfor != null && ArrayInfor[0] != null && !ArrayInfor[0].isEmpty())
+	  			infBuilder.append(ArrayInfor[0]);
+	  		//添加到节点
+	  		jjtThis.AddIntItem(infBuilder.toString(),ArrayInfor[1]);
+	  		if(ArrayInfor[2].equalsIgnoreCase("true"))
+	  			jjtThis.addToVarName(infBuilder.toString(),true);
+	  		else
+	  	  		jjtThis.addToVarName(infBuilder.toString(),false);	
+	  		intName = null;
+	  		ArrayInfor = null;
+		}
+	)*
+	<SEMICOLON>
+}
+//String 声明体
+//[0]数组信息 [1]赋值信息 [3]是否需要后续计算
+String[] StringDeclare() #void:
+{
+	//数组下表
+	String arrIndex = new String(),arrIndexEx = new String();
+	//赋值
+	String strValue = null;
+	Token Value = null;
+	StringBuilder ValueBuilder = null;
+	StringBuilder arrindexb = null;
+	boolean bWaitForCalculate = false;
+	String imValue = null;
+}
+{
+	(
+		//String数组
+		(
+			arrIndex = ArrayStatement() 
+			{
+				//数组下标
+				arrindexb = new StringBuilder();
+				if(arrIndex != null && !arrIndex.isEmpty())
+				{
+					arrindexb.append(",");
+					arrindexb.append(arrIndex);
+				}
+			}
+			(
+				arrIndexEx = ArrayStatement()
+				{
+					if(arrindexb != null && !arrIndex.isEmpty())
+					{
+						arrindexb.append(",");
+						arrindexb.append(arrIndexEx);
+					}
+				}
+			)* 
+			[
+			 	<ASSIGN>
+			 	{ValueBuilder = new StringBuilder();}
+			 	(
+			 		( LOOKAHEAD(Name() <LPAREN>) strValue = CallFuncStatement() | strValue = ConditionalExpression())
+		 		 	{ 
+		 		 		ValueBuilder.append(strValue);
+		 		 		bWaitForCalculate = true;
+		 		 		strValue = null;
+		 		 	}
+				 	|
+			 		(
+			 			<LBRACE> Value = <STRING_LITERAL> 
+			 			{
+			 				imValue = trimeDQM(Value.image);
+	 		 				ValueBuilder.append(imValue);
+	 		 				Value = null;
+	 		 				bWaitForCalculate = false;
+	 		 			}
+			 			(
+			 				<COMMA> Value = <STRING_LITERAL>
+			 				{
+			 					if(Value.image != null && !Value.image.isEmpty())
+			 					{
+			 						imValue = trimeDQM(Value.image);
+			 						ValueBuilder.append(",");
+			 						ValueBuilder.append(imValue);
+			 					}
+		 		 				Value = null;
+		 		 			}
+			 			)* 
+			 			<RBRACE>
+			 		)
+			 	)
+			] 
+		)
+		|
+		//String
+		[
+		 	<ASSIGN> 
+		 	(
+		 		LOOKAHEAD(<STRING_LITERAL>) Value = <STRING_LITERAL>
+		 		| 
+		 		LOOKAHEAD(Name() <LPAREN>) strValue = CallFuncStatement()  
+		 		| strValue = ConditionalExpression()
+		 	)
+		]
+		{ 
+			ValueBuilder = new StringBuilder();
+			if(Value != null)
+			{
+				imValue = trimeDQM(Value.image);
+				ValueBuilder.append(imValue);
+				bWaitForCalculate = false;
+				Value = null;
+			}
+			else if(null != strValue)
+			{
+				ValueBuilder.append(strValue);
+				bWaitForCalculate = true;
+				strValue = null;
+			}
+		}
+	)
+	{  
+		String[] infor = new String[3];
+		if(null != arrindexb)
+			infor[0] = arrindexb.toString();
+		else
+			infor[0] = new String();
+		
+		//数组赋值
+		if(ValueBuilder != null)
+			infor[1] = ValueBuilder.toString();
+		else
+			infor[1] = new String();
+		
+		infor[2] = Boolean.toString(bWaitForCalculate);
+		
+		return infor;
+	}
+}
+/*---------------------------------------*/
+//对象变量定义
+void ObjectVar() :
+{
+	Token intName;
+
+	//[0]数组信息 [1]赋值信息
+	String ArrayInfor[];
+	StringBuilder infBuilder = null;
+
+	String strType = null;
+	jjtThis.setLogShow(logshow);
+	jjtThis.setTabAndStack(this.g_Systab,this.func_Systab,this.function_Systab,this.sysStack,g_DataDefine);	
+}
+{
+	strType = Name() 
+  	{
+  		jjtThis.setStrType(strType);
+  	}
+  	//对象数组
+  	intName = <IDENTIFIER> ArrayInfor = ObjectDeclare()
+  	{
+  		//首先处理数组标示
+  		infBuilder = new StringBuilder();
+  		infBuilder.append(intName.image);
+  		if(ArrayInfor != null && ArrayInfor[0] != null && !ArrayInfor[0].isEmpty())
+  			infBuilder.append(ArrayInfor[0]);
+  		//添加到节点
+  		jjtThis.AddIntItem(infBuilder.toString(),ArrayInfor[1]);
+  		if(ArrayInfor[2].equalsIgnoreCase("true"))
+  			jjtThis.addToVarName(infBuilder.toString(),true);
+  		else
+  	  		jjtThis.addToVarName(infBuilder.toString(),false);
+  		intName = null;
+  		ArrayInfor = null;
+  	}
+  	//附加对象数组
+  	(
+		<COMMA>  
+		intName = <IDENTIFIER> ArrayInfor = ObjectDeclare()
+		{
+	  		//首先处理数组标示
+			infBuilder = new StringBuilder();
+	  		infBuilder.append(intName.image);
+	  		if(ArrayInfor != null && ArrayInfor[0] != null && !ArrayInfor[0].isEmpty())
+	  			infBuilder.append(ArrayInfor[0]);
+	  		//添加到节点
+	  		jjtThis.AddIntItem(infBuilder.toString(),ArrayInfor[1]);
+	  		if(ArrayInfor[2].equalsIgnoreCase("true"))
+	  			jjtThis.addToVarName(infBuilder.toString(),true);
+	  		else
+	  	  		jjtThis.addToVarName(infBuilder.toString(),false);
+	  		ArrayInfor = null;
+	  		intName = null;
+		}
+	)*
+	<SEMICOLON>
+}
+//对象 声明体
+//[0]数组信息 [1]赋值信息 [3]是否需要后续计算
+String[] ObjectDeclare() #void:
+{
+	//数组下表
+	String arrIndex = new String(),arrIndexEx = new String();
+	//赋值
+	String strValue = null;
+	Token Value = null;
+	StringBuilder ValueBuilder = null;
+	StringBuilder arrindexb = null;
+	boolean bWaitForCalculate = false;
+}
+{
+	(
+		//对象数组
+		(
+			arrIndex = ArrayStatement()
+			{
+				//数组下标
+				arrindexb = new StringBuilder();
+				if(arrIndex != null && !arrIndex.isEmpty())
+				{
+					arrindexb.append(",");
+					arrindexb.append(arrIndex);
+				}
+			} 
+			(
+				arrIndexEx = ArrayStatement()
+				{
+					if(arrindexb != null && !arrIndex.isEmpty())
+					{
+						arrindexb.append(",");
+						arrindexb.append(arrIndexEx);
+					}
+				}
+			)* 
+			[
+			 	<ASSIGN>
+			 	{ValueBuilder = new StringBuilder();}
+			 	(
+			 		( LOOKAHEAD(Name() <LPAREN>) strValue = CallFuncStatement() | strValue = ConditionalExpression())
+		 		 	{ 
+		 		 		ValueBuilder.append(strValue);
+		 		 		bWaitForCalculate = true;
+		 		 		strValue = null;
+		 		 	}
+				 	|
+			 		(
+			 			<LBRACE> Value = <IDENTIFIER>
+			 			{
+	 		 				ValueBuilder.append(Value.image);
+	 		 				Value = null;
+	 		 				bWaitForCalculate = false;
+	 		 			}
+			 			(
+			 				<COMMA> Value = <IDENTIFIER>
+			 				{
+			 					if(Value.image != null && !Value.image.isEmpty())
+			 					{
+			 						ValueBuilder.append(",");
+			 						ValueBuilder.append(Value.image);
+			 					}
+		 		 				Value = null;
+		 		 			}
+			 			)* 
+			 			<RBRACE>
+			 		)
+			 	)
+			] 
+		)
+		|
+		//对象
+		[
+		 	<ASSIGN> 
+		 	(
+		 		LOOKAHEAD(Name() <LPAREN>) strValue = CallFuncStatement()
+		 		| LOOKAHEAD(<IDENTIFIER>) Value = <IDENTIFIER>
+		 		| strValue = ConditionalExpression()
+		 	)
+		]
+		{ 
+			ValueBuilder = new StringBuilder();
+			if(Value != null)
+			{
+				ValueBuilder.append(Value.image);
+				bWaitForCalculate = false;
+				Value = null;
+			}
+			else if(null != strValue)
+			{
+				ValueBuilder.append(strValue);
+				bWaitForCalculate = true;
+				strValue = null;
+			}
+		}
+	)
+	{  
+		String[] infor = new String[3];
+		if(null != arrindexb)
+			infor[0] = arrindexb.toString();
+		else
+			infor[0] = new String();
+		
+		//数组赋值
+		if(ValueBuilder != null)
+			infor[1] = ValueBuilder.toString();
+		else
+			infor[1] = new String();
+		
+		infor[2] = Boolean.toString(bWaitForCalculate);
+		
+		return infor;
+	}	
+}
+/*---------------------------------------*/
+//定义使用数据或规则语法--主体规则定义
+/*---------------------------------------*/
+void FuncState(boolean bComple) #void:
+{}
+{
+	DataDefine(bComple)
+	|
+	FunLib(bComple)
+}
+//Data声明
+void DataDefine(boolean bComple):
+{
+	Token id;
+	jjtThis.setParser(this);	
+	jjtThis.setLogShow(logshow);
+	jjtThis.setTabAndStack(this.g_Systab,this.func_Systab,this.function_Systab,this.sysStack,g_DataDefine);
+}
+{
+	<DATA> id = <IDENTIFIER> <LBRACE> 
+	(
+   	 	VarDeclaration(bComple)
+   	)*
+   	<RBRACE>
+	{
+		jjtThis.setStrName(id.image);
+	}
+}
+//Rule定义
+void FunLib(boolean bComple):
+{
+	Token id;
+	jjtThis.setLogShow(logshow);
+	DataTAB temp = this.func_Systab;
+	jjtThis.setParser(this);	
+	jjtThis.setLogShow(logshow);
+	func_Systab = jjtThis.setTabAndStackForFuncDef(this.g_Systab,this.sysStack,"FuncDef_Table",g_DataDefine);
+	this.funDefineInfor = jjtThis.InitFuncForFuncDef(liborLoadFundef);
+}
+{
+	<FUNC>  id = <IDENTIFIER> <LBRACE> 
+   	(	   			   
+   		LOOKAHEAD(FunctionDeclarationLookahead())
+	   	FunctionDefine(bComple)
+   	   	|
+   	   	//statement中包含vardeclcare
+   	   	Statement(bComple)
+	 )*
+	 <RBRACE>
+	{
+		jjtThis.setStrName(id.image);
+		func_Systab = temp;
+		funDefineInfor = null;
+	}
+}
+/*---------------------------------------*/
+//由于函数声明和属性声明非常类似，这个为了区分两个不同
+void FunctionDeclarationLookahead() #void:
+{}
+{
+	ReturnType() <IDENTIFIER> <LPAREN>
+}
+//函数语法定义
+void FunctionDefine(boolean bComple) :
+{
+	String strRt = new String();
+	Token id = null;
+	FuncParameter param = null;
+	jjtThis.setParser(this);	
+	jjtThis.setLogShow(logshow);
+	DataTAB temp = this.function_Systab;
+	function_Systab = jjtThis.setTabAndStackForFunction(this.g_Systab,this.func_Systab,this.sysStack,"FuncBodyDef_Table",g_DataDefine);	
+	jjtThis.setFunc(funDefineInfor,liborLoadFundef);
+}
+{
+	strRt = ReturnType() id = <IDENTIFIER> <LPAREN> param = ParamDefine() <RPAREN> <LBRACE> 
+	(
+		//for,if,while,VarDeclaration都包括在statement中
+		Statement(bComple)
+	)*
+	<RBRACE>
+	{
+		jjtThis.setStrReturnType(strRt);
+		jjtThis.setFunParam(param);
+		jjtThis.setStrFunName(id.image);
+		this.function_Systab = temp;
+	}
+}
+/*
+ * 参数语法定义
+ * 由于存在string，所以不允许char数组
+ */
+FuncParameter ParamDefine() #void:
+{
+	Token paramtype = null,id = null;
+	int count = 0;
+	FuncParameter funcParam = new FuncParameter();
+	Param parm = null;
+}
+{
+	(
+		( 
+			( ( paramtype = <BOOLEAN> | paramtype = <DOUBLE> | paramtype = <INT> | paramtype = <STRING> | paramtype = <IDENTIFIER> ) 
+			  id = <IDENTIFIER> 
+			  (
+				 <LBRACKET> <RBRACKET>
+				 {count++;}
+			  )*
+			)
+			{
+				if(0 == count)
+					parm = new Param(paramtype.image,id.image,false,0,"");
+				else
+					parm = new Param(paramtype.image,id.image,true,count,"");
+				count =0;
+				funcParam.addParam(parm);
+			}
+			( 
+				<COMMA> 
+				{
+					paramtype = null;id = null;count = 0;
+				}
+				( paramtype = <BOOLEAN> | paramtype = <DOUBLE> |paramtype =  <INT> | paramtype = <STRING> | paramtype = <IDENTIFIER> ) 
+				id = <IDENTIFIER> 
+				(
+					<LBRACKET> <RBRACKET>
+					{count++;}
+				)*
+				{
+					parm = null;
+					if(0 == count)
+						parm = new Param(paramtype.image,id.image,false,0,"");
+					else
+						parm = new Param(paramtype.image,id.image,true,count,"");
+					count =0;
+					funcParam.addParam(parm);
+				}
+			)*
+		)
+		| paramtype = <VOID> | paramtype = <CHAR> id = <IDENTIFIER>
+		{
+			if(null != id)
+			{
+				if(0 == count)
+					parm = new Param(paramtype.image,id.image,false,0,"");
+				else
+					parm = new Param(paramtype.image,id.image,true,count,"");
+			}
+			else
+			{
+				if(0 == count)
+					parm = new Param(paramtype.image,null,false,0,"");
+				else
+					parm = new Param(paramtype.image,null,true,count,"");
+			}
+			count =0;
+			funcParam.addParam(parm);
+		}
+	)
+	{ return funcParam;}
+}
+//定义函数返回类型语法
+/*
+ * 由于存在string，所以不允许char数组
+ */
+String ReturnType() #void:
+{
+	Token type = null;
+	String strType = new String();
+}
+{
+	(type = <VOID> | strType = Type())
+	{
+		if(type != null)
+			return type.image;
+		else
+			return strType;
+	}
+}
+/*---------------------------------------*/
+//定义变量类型
+/*---------------------------------------*/
+String Type() #void:
+{
+	String strValue = new String();
+	StringBuilder typeBuilder  = null;
+}
+{
+	(
+		(
+			( strValue = PrimitiveType() | strValue = Name() ) 
+			{
+				typeBuilder = new StringBuilder();
+				typeBuilder.append(strValue);
+			}
+			( 
+				<LBRACKET> <RBRACKET>
+				{
+					typeBuilder.append("[]");
+				}
+			)*
+		)
+	)
+	{
+		return typeBuilder.toString();
+	}
+}
+//定义除char外的原始类型
+String PrimitiveType() #void:
+{
+	Token type = null;
+}
+{
+	(type = <BOOLEAN> | type = <DOUBLE> | type = <INT>| type = <STRING> | type = <CHAR>)
+	{
+		return type.image;
+	}
+}
+//ValueLookahead
+void ValueLookahead() #void:
+{}
+{
+	<DECIMAL_LITERAL> | <INTEGER_LITERAL> 
+	| <FLOATING_POINT_LITERAL> | <CHARACTER_LITERAL> 
+	| <STRING_LITERAL> | <TRUE> | <FALSE> | <NULL> 
+}
+//定义函数值语法
+String Value() #void:
+{
+	Token value = null;
+	String strValue = new String();
+	boolean bChar = false, bStr = false;
+}
+{
+	(
+		LOOKAHEAD(ValueLookahead())
+		(
+			value = <DECIMAL_LITERAL> | value = <INTEGER_LITERAL> 
+			| value = <FLOATING_POINT_LITERAL> | value = <CHARACTER_LITERAL> {bChar = true;}
+			| value = <STRING_LITERAL> { bStr = true;}| value = <TRUE> | value = <FALSE> | value = <NULL> 
+		)
+		|
+		strValue = ConditionalExpression()
+	)
+	{
+		if(value != null)
+		{
+			if(bStr)
+				return trimeDQM(value.image);
+			else if(bChar)
+				return trimeQM(value.image);
+			else 
+				return value.image;
+		}
+		else
+			return strValue;
+	}
+}
+/*---------------------------------------*/
+//流程控制定义部分
+/*---------------------------------------*/
+//定义if分支语法
+void IfStatement(boolean bComple) :
+{
+	jjtThis.setLogShow(logshow);
+	jjtThis.setTabAndStack(this.g_Systab,this.func_Systab,this.function_Systab,this.sysStack,g_DataDefine);	
+}
+{
+	(
+		<IF> <LPAREN> IfConditionExpr() <RPAREN> StatementClause(bComple)
+		( 
+		 	LOOKAHEAD(<ELSE> <IF>) 
+		 	<ELSE> <IF> 
+		 	<LPAREN> IfConditionExpr() <RPAREN> StatementClause(bComple) 
+		)*
+		[ 
+		 	LOOKAHEAD(<ELSE>) 
+		 	<ELSE> StatementClause(bComple) 
+		 ]
+	)
+}
+//if statement
+void StatementClause(boolean bCompile):
+{
+	jjtThis.setLogShow(logshow);
+	jjtThis.setTabAndStack(this.g_Systab,this.func_Systab,this.function_Systab,this.sysStack,g_DataDefine);	
+}
+{
+	(
+		LOOKAHEAD(<LBRACE> Statement())
+		(<LBRACE> (Statement(bCompile))+ <RBRACE>)
+		|
+		Statement(bCompile)
+	)
+}
+//if ConditionExp
+void IfConditionExpr(): 
+{
+	jjtThis.setLogShow(logshow);
+	jjtThis.setTabAndStack(this.g_Systab,this.func_Systab,this.function_Systab,this.sysStack,g_DataDefine);	
+}
+{
+	(
+		LOOKAHEAD(Name() (<IN> | <NOTIN>))
+		NotInorIn()
+		|
+		ConditionalExpression()
+	)
+}
+//if Notin语法
+void NotInorIn():
+{
+	Token oper = null;
+	String strLeft = new String();
+	String strRight = new String();
+	jjtThis.setLogShow(logshow);
+	jjtThis.setTabAndStack(this.g_Systab,this.func_Systab,this.function_Systab,this.sysStack,g_DataDefine);	
+}
+{
+	(strLeft = Name() (oper = <IN> | oper = <NOTIN>) strRight = Name())
+	{
+		jjtThis.setStrLeftValue(strLeft);
+		jjtThis.strOpera(oper.image);
+		jjtThis.setStrRightValue(strRight);
+	}
+}
+/*---------------------------------------*/
+//定义for语句语法
+void ForStatement(boolean bComple) :
+{
+	Initor intiValue = null;
+	OperationDef ofState = null;
+	OperationDef StepOper = null;
+	
+	Token ofLeft = null, ofRight = null;
+	Token stepid = null, stepop = null, stepvalue = null;	
+	jjtThis.setLogShow(logshow);
+	jjtThis.setTabAndStack(this.g_Systab,this.func_Systab,this.function_Systab,this.sysStack,g_DataDefine);	
+}
+{
+	<FOR>
+	(
+		//for(one of sups)语法
+		LOOKAHEAD(<LPAREN> <IDENTIFIER> <OF>)
+		( 
+			<LPAREN> ofLeft = <IDENTIFIER> <OF> ofRight = <IDENTIFIER> <RPAREN>
+			StatementClause(bComple)	//处理语句
+		)
+	|
+		//for(int t = 2; t > 3; t++)语法
+		(
+			<LPAREN> 
+				intiValue = ForIniStat() <SEMICOLON> 	//初始化变量
+				ConditionalExpression() <SEMICOLON>	//终止条件
+				stepid = <IDENTIFIER> (stepop = <INCR> | stepop = <DECR> | (stepop = <PLUSASSIGN> stepvalue = <DECIMAL_LITERAL>) | (stepop = <MINUSASSIGN> stepvalue = <DECIMAL_LITERAL>))	//步幅设置
+			<RPAREN>
+			StatementClause(bComple)	//处理语句
+		)
+	)
+	{
+		if(ofLeft != null && ofRight != null)
+		{
+			ofState = new OperationDef("of",ofLeft.image, ofRight.image);
+			jjtThis.setOfState(ofState);
+		}
+		else
+		{
+			if(null != stepvalue)
+				StepOper = new OperationDef(stepop.image,stepid.image,stepvalue.image);
+			else
+				StepOper = new OperationDef(stepop.image,stepid.image,"");
+			jjtThis.setIntiValue(intiValue);
+			jjtThis.setStepOper(StepOper);
+		}
+	}
+}
+//for语句条件初始化语句语法
+Initor ForIniStat() #void:
+{
+	Token type = null,id = null,number = null;
+}
+{
+	([type = <INT>] id = <IDENTIFIER> [<ASSIGN> (number = <DECIMAL_LITERAL> | number = <INTEGER_LITERAL>)])
+	{
+		Initor itor = new Initor(id.image,type.image,number.image);
+		return itor;
+	}
+}
+/*---------------------------------------*/
+//while循环语法定义
+void WhileStatement(boolean bComple) :
+{
+	jjtThis.setLogShow(logshow);
+	jjtThis.setTabAndStack(this.g_Systab,this.func_Systab,this.function_Systab,this.sysStack,g_DataDefine);	
+}
+{
+	<WHILE> <LPAREN> ConditionalExpression() <RPAREN>
+	StatementClause(bComple)	//处理语句
+}
+/*---------------------------------------*/
+//逻辑表达式语法定义
+/*---------------------------------------*/
+//从OR开始定义，OR优先级最低，优先级1
+String ConditionalExpression() :
+{
+	String strLeftValue = new String();
+	String strRightValue = new String();
+	Token oper = null;
+	jjtThis.setLogShow(logshow);
+	jjtThis.setTabAndStack(this.g_Systab,this.func_Systab,this.function_Systab,this.sysStack,g_DataDefine);	
+}
+{
+	(
+		strLeftValue = ConditionalAndExpression() 
+		( 
+			oper = <SC_OR> strRightValue = ConditionalAndExpression() 	 
+			{
+				jjtThis.addStrRightValue(strRightValue);
+				if(oper != null)
+					jjtThis.addStrOperator(oper.image);
+				oper = null;
+			}
+		)*
+	)
+	{	
+		jjtThis.setStrLeftValue(strLeftValue);
+		
+		return "";
+	}
+}
+//AND表达式，优先级2
+String ConditionalAndExpression() :
+{
+	String strLeftValue = new String();
+	String strRightValue = new String();
+	Token oper = null;	
+	jjtThis.setLogShow(logshow);
+	jjtThis.setTabAndStack(this.g_Systab,this.func_Systab,this.function_Systab,this.sysStack,g_DataDefine);	
+}
+{
+	strLeftValue = EqualityExpression() 
+	(  
+		oper = <SC_AND> strRightValue = EqualityExpression() 
+		{
+			jjtThis.addStrRightValue(strRightValue);
+			if(oper != null)
+				jjtThis.addStrOperator(oper.image);
+			oper = null;
+		}
+	)*
+	{	
+		jjtThis.setStrLeftValue(strLeftValue);
+		
+		return "";
+	}
+}
+//==|!=表达式，优先级3
+String EqualityExpression() :
+{
+	String strLeftValue = new String();
+	String strRightValue = new String();
+	Token Opera = null;
+	jjtThis.setLogShow(logshow);
+	jjtThis.setTabAndStack(this.g_Systab,this.func_Systab,this.function_Systab,this.sysStack,g_DataDefine);	
+}
+{
+	strLeftValue = RelationalExpression() (( Opera = <EQ> | Opera = <NE> ) strRightValue = RelationalExpression())?
+	{
+		jjtThis.setStrLeftValue(strLeftValue);
+		jjtThis.setStrRightValue(strRightValue);
+		if(Opera != null)
+			jjtThis.strOpera(Opera.image);
+		return "";
+	}
+}
+//<|><=|>=表达式，优先级4
+String RelationalExpression() :
+{
+	String strLeftValue = new String();
+	String strRightValue = new String();
+	Token Opera = null;	
+	jjtThis.setLogShow(logshow);
+	jjtThis.setTabAndStack(this.g_Systab,this.func_Systab,this.function_Systab,this.sysStack,g_DataDefine);	
+}
+{
+	strLeftValue = AdditiveExpression() ( ( Opera = <GT> | Opera = <LT> | Opera = <LE> | Opera = <GE>) strRightValue = AdditiveExpression() )?
+	{
+		jjtThis.setStrLeftValue(strLeftValue);
+		jjtThis.setStrRightValue(strRightValue);
+		if(Opera != null)
+			jjtThis.strOpera(Opera.image);
+		return "";
+	}
+}
+//+|-表达式，优先级5
+String AdditiveExpression() :
+{
+	String strLeftValue = new String();
+	String strRightValue = new String();
+	Token Opera = null;
+	jjtThis.setLogShow(logshow);
+	jjtThis.setTabAndStack(this.g_Systab,this.func_Systab,this.function_Systab,this.sysStack,g_DataDefine);	
+}
+{
+	strLeftValue = MultiplicativeExpression() 
+	( 
+		( Opera = <PLUS> | Opera = <MINUS> ) strRightValue = MultiplicativeExpression() 
+		{
+			jjtThis.addStrRightValue(strRightValue);
+			if(Opera != null)
+				jjtThis.addStrOperator(Opera.image);
+			Opera = null;
+		}
+	)*
+	{
+		jjtThis.setStrLeftValue(strLeftValue);
+		return "";
+	}
+}
+//*//%表达式，优先级6
+String MultiplicativeExpression() :
+{
+	String strLeftValue = new String();
+	String strRightValue = new String();
+	Token Opera = null;
+	jjtThis.setLogShow(logshow);
+	jjtThis.setTabAndStack(this.g_Systab,this.func_Systab,this.function_Systab,this.sysStack,g_DataDefine);	
+}
+{
+	strLeftValue = UnaryExpression() 
+	( 
+		( Opera = <STAR> | Opera = <SLASH> | Opera = <REM> ) strRightValue = UnaryExpression() 
+		{
+			jjtThis.addStrRightValue(strRightValue);
+			if(Opera != null)
+				jjtThis.addStrOperator(Opera.image);
+			Opera = null;
+		}
+	)*
+	{
+		jjtThis.setStrLeftValue(strLeftValue);
+		return "";
+	}
+}
+//单目操作表达式+|-|!，优先级7
+String UnaryExpression() :
+{
+	Token operat = null;
+	String strValue = new String();	
+	jjtThis.setLogShow(logshow);
+	jjtThis.setTabAndStack(this.g_Systab,this.func_Systab,this.function_Systab,this.sysStack,g_DataDefine);	
+}
+{
+	(
+		( operat = <PLUS> | operat = <MINUS> | operat = <BANG> ) strValue = UnaryExpression()
+		|
+		strValue = PrefixExpression()
+		|
+		LOOKAHEAD(<LPAREN> Type() <RPAREN>)
+		strValue = CastExpression()
+		|
+		strValue = PostfixExpression()
+		|
+		(<LPAREN> strValue = ConditionalExpression() <RPAREN>)
+	)
+	{
+		if(operat != null)
+			jjtThis.setStrOper(operat.image);
+		jjtThis.setStrValue(strValue);
+		return "";
+	}
+}
+//前++|--单目表达式，优先级8
+String PrefixExpression() :
+{
+	Token operat = null;
+	String strValue = new String();	
+	jjtThis.setLogShow(logshow);
+	jjtThis.setTabAndStack(this.g_Systab,this.func_Systab,this.function_Systab,this.sysStack,g_DataDefine);	
+}
+{
+	(operat = <INCR> | operat = <DECR>) strValue = PrimaryExpression()
+	{
+		if(operat != null)
+			jjtThis.setStrOper(operat.image);
+		jjtThis.setStrValue(strValue);
+		return "";
+	}
+}
+//强制转换，优先级8
+String CastExpression() :
+{
+	String strType = new String();
+	String strValue = new String();	
+	jjtThis.setLogShow(logshow);
+	jjtThis.setTabAndStack(this.g_Systab,this.func_Systab,this.function_Systab,this.sysStack,g_DataDefine);	
+}
+{
+	<LPAREN> strType = PrimitiveType() <RPAREN> strValue = PostfixExpression()
+	{
+		jjtThis.setStrType(strType);
+		jjtThis.setStrValue(strValue);
+		return "";
+	}
+}
+//后++|--单目表达式，优先级9
+String PostfixExpression() :
+{
+	Token operat = null,identi = null,This = null;
+	String strValue = new String();
+
+	//[0]数组名 [1]下标名 [2]变量名
+	String[] arrayItem = null;
+	jjtThis.setLogShow(logshow);
+	jjtThis.setTabAndStack(this.g_Systab,this.func_Systab,this.function_Systab,this.sysStack,g_DataDefine);	
+	boolean[] bValueSimple = new boolean[1];
+}
+{	
+	(
+		LOOKAHEAD(<THIS> <DOT> <IDENTIFIER> (<INCR> | <DECR>))
+		(This = <THIS> <DOT> identi = <IDENTIFIER>(operat = <INCR> | operat = <DECR>))
+		|
+		(This = <THIS> <DOT> identi = <IDENTIFIER>)
+		|
+		LOOKAHEAD(Name() (<INCR> | <DECR>))
+		(strValue = Name() (operat = <INCR> | operat = <DECR>))
+		|
+		LOOKAHEAD(CallFuncLookAhead())
+		strValue = CallFuncStatement()
+		{
+			jjtThis.setWaitForChild(true);
+		}
+		|
+		LOOKAHEAD(Name() <LBRACKET>)
+		arrayItem = ArrayItem()
+		|
+		strValue = SimpleExpress(bValueSimple)
+	)
+	{
+		jjtThis.setValueNotCalc(bValueSimple[0]);
+		if(operat != null)
+			jjtThis.setStrOper(operat.image);
+		
+		if(arrayItem != null)
+		{
+			//[0]数组名 [1]下标名 [2]变量名 oper下标，left数组名,right变量名
+			OperationDef aItem = new OperationDef(arrayItem[1],arrayItem[0],arrayItem[2]);
+			jjtThis.setArrayItem(aItem);
+		}
+		else if(identi != null)
+			jjtThis.setStrValue(FuncConst.THIS + FuncConst.DOT + identi.image);
+		else
+			jjtThis.setStrValue(strValue);
+		
+		return "";
+	}
+}
+//SimpleExpress
+String SimpleExpress(boolean[] bValueSimple) #void:
+{
+	Token value = null;
+	String strValue = new String();
+	boolean bChar = false, bStr = false;
+}
+{
+	(
+		strValue = Name()
+		| 
+		value = <TRUE> 
+		{
+			bValueSimple[0] = true;
+		}
+		| 
+		value = <FALSE>
+		{
+			bValueSimple[0] = true;
+		}
+		|
+		value = <DECIMAL_LITERAL> 
+		{
+			bValueSimple[0] = true;
+		}
+		| 
+		value = <INTEGER_LITERAL>
+		{
+			bValueSimple[0] = true;
+		}
+		|
+		value = <STRING_LITERAL>
+		{
+			bValueSimple[0] = true;
+			bStr = true;
+		}
+		|
+		value = <CHARACTER_LITERAL>
+		{
+			bValueSimple[0] = true;
+			bChar = true;
+		}
+		|
+		value = <FLOATING_POINT_LITERAL>
+		{
+			bValueSimple[0] = true;
+		}
+	)
+	{
+		if(value != null)
+		{
+			if(bChar)
+				return trimeQM(value.image);
+			else if(bStr)
+				return trimeDQM(value.image);
+			else
+				return value.image;
+		}
+		else
+			return strValue;
+	}
+}
+/*---------------------------------------*/
+//语句语法定义
+/*---------------------------------------*/
+// 语句定义
+void Statement(boolean bComple) #void:
+{}
+{
+	BigStatmentBlock(bComple)
+	|
+	LitBlock(bComple) 
+	|
+	EmptyStatement()
+	|
+	LOOKAHEAD(VarDeclLookAhead())
+	VarDeclaration(bComple)
+	|
+	StatementExpression() 
+	|
+	BreakStatement()
+	|
+	ContinueStatement()
+	|
+	ReturnStatement()
+	|
+	IfStatement(bComple)
+	|
+	ForStatement(bComple)
+	|
+	WhileStatement(bComple)
+}
+//{}Block语句
+void BigStatmentBlock(boolean bComple) #void:
+{}
+{
+	LOOKAHEAD(<LBRACE> Statement(bComple) <RBRACE> <SEMICOLON>)
+	<LBRACE> Statement(bComple) <RBRACE> <SEMICOLON>
+	|
+	<LBRACE> Statement(bComple) <RBRACE>
+}
+//()Block语句
+void LitBlock(boolean bComple)  #void:
+{}
+{
+	<LPAREN> ( Statement(bComple) )* <RPAREN>
+}
+//空语句使用必须添加;比如{;}
+void EmptyStatement() #void:
+{}
+{
+	<SEMICOLON>
+}
+//语句中可能存在的表达式
+void StatementExpression():
+{
+	String strLeftValue = new String();
+	String strRightVlaue = new String();
+	String strOper = new String();
+	//[0]数组名 [1]下标名 [2]变量名
+	String[] strArray = new String[3];
+	boolean bArray = false;
+	jjtThis.setLogShow(logshow);
+	jjtThis.setTabAndStack(this.g_Systab,this.func_Systab,this.function_Systab,this.sysStack,g_DataDefine);	
+}
+{
+	(
+		(PrefixExpression() <SEMICOLON>)
+		{
+			jjtThis.setPopNeed(true);
+		}
+		|
+		LOOKAHEAD(AssignmentLookAhead())
+		(strLeftValue = PrimaryExpression() strOper = AssignmentOperator() strRightVlaue = ConditionalExpression() <SEMICOLON>)
+		|
+		LOOKAHEAD(ArrayItemLookAhead())
+		(strArray = ArrayItem() strOper = AssignmentOperator() strRightVlaue = ConditionalExpression() <SEMICOLON>)
+		{ bArray = true;}
+		|
+		LOOKAHEAD(CallFuncLookAhead())
+		(CallFuncStatement() <SEMICOLON>)
+		{
+			jjtThis.setPopNeed(true);
+		}
+		|
+		(PostfixExpression() <SEMICOLON>)
+		{
+			jjtThis.setPopNeed(true);
+		}
+	)
+	{
+		if(bArray)
+			jjtThis.setStrArrayItem(strArray);
+		else
+			jjtThis.setStrLeftValue(strLeftValue);
+		jjtThis.setStrRightVlaue(strRightVlaue);
+		jjtThis.setStrOper(strOper);
+	}
+}
+//调用函数语句
+void ArrayItemLookAhead() #void:
+{}
+{
+	Name() <LBRACKET>
+}
+//数组项
+//[0]数组名 [1]下标名 [2]变量名
+String[] ArrayItem() #void:
+{
+	String strName = null, ident = null;
+	Token number = null, index = null,operat = null;
+	StringBuilder strNumbers = new StringBuilder();
+	StringBuilder strNemIndex = new StringBuilder();
+}
+{
+	(
+		strName = Name() 
+		(
+			<LBRACKET> 
+			(
+				(number = <IDENTIFIER> (operat = <INCR> | operat = <DECR>))
+				{
+					if(strNumbers.length() != 0)
+						strNumbers.append(",");
+					strNumbers.append(number.image);
+					if(null != operat)
+						strNumbers.append(operat.image);
+				}
+				|
+				((operat = <INCR> | operat = <DECR>) number = <IDENTIFIER>)
+				{
+					if(strNumbers.length() != 0)
+						strNumbers.append(",");
+					if(null != operat)
+						strNumbers.append(operat.image);
+					strNumbers.append(number.image);
+				}
+				| 
+				(number = <INTEGER_LITERAL> | number = <DECIMAL_LITERAL>)
+				{
+					if(strNumbers.length() != 0)
+						strNumbers.append(",");
+					strNumbers.append(number.image);
+				}
+			) 
+			<RBRACKET>
+		)+
+		[
+		 	<DOT> ident = Name()
+			(
+				<LBRACKET> 
+				(
+					(index = <IDENTIFIER> (operat = <INCR> | operat = <DECR>))
+					{
+						strNemIndex.append(",");
+						if(null != index)
+							strNemIndex.append(index.image);
+						if(null != operat)
+							strNemIndex.append(operat.image);
+						index = null;
+						operat = null;
+					}
+					|
+					((operat = <INCR> | operat = <DECR>) index = <IDENTIFIER>)
+					{
+						strNemIndex.append(",");
+						if(null != operat)
+							strNemIndex.append(operat.image);
+						if(null != index)
+							strNemIndex.append(index.image);
+						index = null;
+						operat = null;
+					}
+					| 
+					(index = <INTEGER_LITERAL> | index = <DECIMAL_LITERAL>)
+					{
+						strNemIndex.append(",");
+						if(null != index)
+							strNemIndex.append(index.image);
+						index = null;
+						operat = null;
+					}
+				)
+				<RBRACKET> 
+			)*
+		]
+	)
+	{
+		String[] result = new String[3];
+		result[0] = strName;
+		result[1] = strNumbers.toString();
+		if(ident != null)
+			result[2] = ident + strNemIndex.toString();
+		else
+			result[2] = null;
+		
+		return result;
+	}
+}
+//调用函数语句
+void CallFuncLookAhead() #void:
+{}
+{
+	Name() <LPAREN>
+}
+//方法调用
+String CallFuncStatement() :
+{
+	String funname = new String(), strValue = new String();
+	StringBuilder valueBuilder = null;	
+	jjtThis.setLogShow(logshow);
+	jjtThis.setTabAndStack(this.g_Systab,this.func_Systab,this.function_Systab,this.sysStack,g_DataDefine);	
+	jjtThis.setFunc(funDefineInfor,liborLoadFundef);
+	int paracount = 0;
+}
+{
+	(
+		LOOKAHEAD(Name() <LPAREN> Value())
+		funname = Name() 
+		<LPAREN>
+			(
+				strValue = Value()
+				{
+					valueBuilder = new StringBuilder();
+					if(null != strValue)
+						valueBuilder.append(strValue);
+					else
+						valueBuilder.append("");
+					strValue = null;
+					paracount++;
+				}
+				(
+					<COMMA> strValue = Value()
+					{
+						valueBuilder.append(",");
+						if(null != strValue)
+							valueBuilder.append(strValue);
+						else
+							valueBuilder.append("");
+						paracount++;
+						strValue = null;
+					}
+				)*
+			) 
+		<RPAREN>
+		|
+		funname = Name() <LPAREN> <RPAREN>
+	)
+	{	
+		jjtThis.setStrFunName(funname);
+		if(valueBuilder != null)
+			jjtThis.setStrParam(valueBuilder.toString());
+		jjtThis.setParaCount(paracount);
+			
+		return "";
+	}
+}
+//原子表达式this.|(expression)|obj.，优先级10
+String PrimaryExpression() #void:
+{
+	Token ident = null;
+	String strValue = new String();
+}
+{
+	(
+		(<THIS> <DOT> ident = <IDENTIFIER>)
+		{
+			StringBuilder bd = new StringBuilder();
+			bd.append(FuncConst.THIS + FuncConst.DOT);
+			bd.append(ident.image);
+			strValue = bd.toString();
+		}
+		|
+		strValue = Name()
+	)
+	{return strValue;}
+}
+//仅为去除赋值冲突时
+void AssignmentLookAhead() #void:
+{}
+{
+	PrimaryExpression() (<ASSIGN> | <STARASSIGN> | <REMASSIGN> | <SLASHASSIGN> |  <PLUSASSIGN> | <MINUSASSIGN>)
+}
+//赋值关键字
+String AssignmentOperator() #void:
+{
+	Token oper;
+}
+{
+	(oper = <ASSIGN> | oper = <STARASSIGN> | oper = <REMASSIGN> | oper = <SLASHASSIGN> |  oper = <PLUSASSIGN> | oper = <MINUSASSIGN>)
+	{
+		return oper.image;
+	}
+}
+//break语句
+void BreakStatement() :
+{
+	jjtThis.setLogShow(logshow);
+	jjtThis.setTabAndStack(this.g_Systab,this.func_Systab,this.function_Systab,this.sysStack,g_DataDefine);	
+}
+{
+	<BREAK> <SEMICOLON>
+}
+//continue语句
+void ContinueStatement() :
+{
+	jjtThis.setLogShow(logshow);
+	jjtThis.setTabAndStack(this.g_Systab,this.func_Systab,this.function_Systab,this.sysStack,g_DataDefine);	
+}
+{
+	<CONTINUE> <SEMICOLON>
+}
+//return语句
+void ReturnStatement() :
+{
+	String strValue = null;	
+	jjtThis.setLogShow(logshow);
+	jjtThis.setTabAndStack(this.g_Systab,this.func_Systab,this.function_Systab,this.sysStack,g_DataDefine);	
+}
+{
+	(<RETURN> [ strValue = Value() ] <SEMICOLON>)
+	{
+		if(strValue != null)
+			jjtThis.setStrValue(strValue);
+	}
+}
+/*---------------------------------------*/
+//回复客户调用
+/*---------------------------------------*/
+//return语句
+void Return2Client() :
+{
+	String strValue = null;
+	jjtThis.setLogShow(logshow);
+	jjtThis.setTabAndStack(this.g_Systab,this.func_Systab,this.function_Systab,this.sysStack,g_DataDefine);	
+}
+{
+	(<RETURNTOC> [ strValue = Value() ] <SEMICOLON>)
+	{
+		if(strValue != null)
+			jjtThis.setStrValue(strValue);
+	}
+}
+/*---------------------------------------*/
+//错误恢复
+/*---------------------------------------*/
+JAVACODE
+void error_skipto(int Tokenkind,int end, String preinfor) 
+{
+	// generate the exception object.
+  	ParseException e = generateParseException();  
+  	StringBuilder inforb = new StringBuilder();
+  	inforb.append(preinfor);
+  	inforb.append(e.toString());
+  	System.out.println("\n<------HyRule Exception catched------> ");
+  	System.out.println(inforb.toString());  
+  	
+  	Token t;
+  	do 
+  	{
+  		t = getNextToken();
+  	} 
+  	while (t.kind != Tokenkind && t.kind != end);
+  	System.out.println("<------HyRule Exception finish------> ");
+}

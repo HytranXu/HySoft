@@ -1,0 +1,52 @@
+hy_debug on;
+hy_debug runon; 
+hy_show tabs;
+hy_set log off;
+hy_set loglv debug;
+load temp
+{	
+	int t[3] = {1,3,5};
+	vector vt = t,vt1=vt,vt3;
+	//vt3 = vt;
+	/*int temp = 0;
+	vt2.add(t[temp++]);
+	vt.add(7);
+	vt.del(1);
+	int vid = vt2.getId(5);
+	int vvalue = vt2.getItem(1);
+	vt3 = vt2.copy();
+	vt1.clear();
+	int vva1 = vt3[tmp++];
+	vva1 = vt3[3];
+	int tV[4] = vt3;
+	
+	for(one of vt3)
+	{
+		vva1 = one;
+		if(vva1 == 1)
+			break;
+	}
+	
+	funlib temp
+	{
+		vector getSub(string name, int age, int howmany, string prename)
+		{
+			vector result;
+			string tempResult;
+			
+			for(int t=0; t<howmany; t++)
+			{
+				tempResult = prename + name;
+				tempResult += age;
+				tempResult += " " + t;
+				result.add(tempResult);
+			}
+			return result;
+		}
+	}
+	
+	string name = "xhc";
+	int age = 10, howmany = 3;
+	vector result = temp.getSub(name,age,howmany,"pre");
+	toClient: result;*/
+}

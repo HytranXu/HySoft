@@ -1,0 +1,20 @@
+dor > ./doc/UC/dump.txt
+
+/*调试：
+上边 dor是个别名 java -classpath ./bin HyRule
+1、hy_debug on; hy_show ends; hy_show debug; hy_restart; hy_end;
+   hy_debug runon; hy_debug runoff;
+2、下边的例子总13行的int t>0;是个语法错误。但是通过这个;恢复所以这行不受影响
+*/
+hy_debug on;
+hy_show ends;
+hy_show mems;
+load test
+{
+	int t = 1, t2 = 3;
+	int m = t + t2;
+	int t>0;
+	return 0;
+}
+end;
+hy_show debug;

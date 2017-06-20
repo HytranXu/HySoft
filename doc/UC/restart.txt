@@ -1,0 +1,35 @@
+dor > ./doc/UC/dump.txt
+
+/*调试：
+一次可以处理多个脚本演示
+1、Compile中的loadDeclare中的 Vardeclare，赋值及返回
+2、hy_debug on; hy_debug off;
+3、hy_show ends;hy_show debug;hy_show endo;hy_show mems;hy_show memo;
+4、hy_restart conew;hy_restart on;hy_restart off;
+5、hy_end; ctrl+d <EOF>
+*/
+hy_debug on;
+hy_show ends;
+hy_show mems;
+load test.fun,testok
+{
+	int t = 1, t2[2] = {3,2};
+	int m = t + t2;
+	char ch, cha = 'a', km = ab(12), mm = a.b(10);
+	km = ab(12);
+	mm = a.b(10);
+	char m = (char)b;
+	
+	return m;
+}
+end;
+hy_restart conew;
+hy_end;
+
+load testey
+{
+	int t = 1, te[2] = {3,2}, ht[3]={1,2};
+	int m = t + t2;
+}
+end;
+hy_restart off;

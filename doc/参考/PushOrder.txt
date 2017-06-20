@@ -1,0 +1,95 @@
+{
+    "PushOrderRequest": {
+        "STORE_ID": "4000",
+	"QUEUE_NO" : "10",
+	"FIRST_NAME" : "",
+	"LAST_NAME" : "",
+        "PRE_ORDER_ID": "89341",
+        "SUBMIT_DATETIME": "01/05/2015"
+    },
+    "PushOrderResponse": {
+        "ERROR_CODE" : "0000",
+	"ERROR_DESC" : "",
+        "PRE_ORDER_ID": "89341",
+        "CUST_TYPE": "1",
+        "SALUTATION": "2",
+        "EMAIL": "ZLJ@ril.com",
+        "MOBILE": "7045315076",
+        "GENDER": "1",
+        "FIRST_NAME": "zhang",
+        "MIDDLE_NAME": "lei",
+        "LAST_NAME": "jie",
+        "BIRTHDAY": "01/01/2015",
+        "RELATION_TYPE": "1",
+        "RELATION_FIRST_NAME": "RELATION_FIRST_NAME",
+        "RELATION_MIDDLE_NAME": "wang",
+        "RELATION_LAST_NAME": "ge",
+        "ALTERNATE_WORK_NO": "8493943",
+        "PAN_CARD_NO": "893894838493",
+        "COMMUNICATION_CHANNEL": "1",
+        "PRESENT_STATE": "0",
+        "PRESENT_DISTRICT": "yogi hotel",
+        "PRESENT_CITY": "Mumbai",
+        "PRESENT_LOCALITY": "43lkkfksldfs",
+        "PRESENT_BUILDINGNAME": "PRESENT_BUILDINGNAME",
+        "PRESENT_HOUSE": "PRESENT_HOUSE",
+        "PRESENT_STREETNAME": "PRESENT_STREETNAME",
+        "PRESENT_LANDMARK": "100",
+        "PRESENT_PINCODE": "1093A",
+        "PERMANENT_STATE": "2",
+        "PERMANENT_DISTRICT": "PERMANENT_DISTRICT",
+        "PERMANENT_CITY": "Beijing",
+        "PERMANENT_LOCALITY": "PERMANENT_LOCALITY",
+        "PERMANENT_BUILDINGNAME": "PERMANENT_BUILDINGNAME",
+        "PERMANENT_HOUSE": "PERMANENT_HOUSE",
+        "PERMANENT_STREETNAME": "PERMANENT_STREETNAME",
+        "PERMANENT_LANDMARK": "isajfldf",
+        "PERMANENT_PINCODE": "8928304802",
+        "POA_TYPE": "A",
+        "POA_ID_NO": "B",
+        "POA_ISSUED_DATE": "02/02/2020",
+        "POA_ISSUING_AUTHORITY": "01/01/2013",
+        "POA_PLACE_OF_ISSUE": "20/20/2015",
+        "POI_TYPE": "B",
+        "POI_ID_NO": "943894304",
+        "POI_ISSUED_DATE": "10/10/2010",
+        "POI_ISSUING_AUTHORITY": "YES",
+        "POI_PLACE_OF_ISSUE": "100",
+	"SUBMIT_DATETIME" : "01/05/2015",
+        "ORDER_PRODUCTS_LIST": [
+            {
+                "PRODUCT_ID": "7847594375987439",
+                "PRODUCT_TYPE": "1",
+                "PRODUCT_NAME": "Iphone6",
+                "PRODUCT_PRICE": "6000",
+                "BIND_PRODUCT_ITEMS": [
+                    {
+                        "PRODUCT_ID": "898695895865",
+                        "PRODUCT_TYPE": "4",
+                        "PRODUCT_NAME": "HTC",
+                        "PRODUCT_PRICE": "3000"
+                    },
+                    {
+                        "PRODUCT_ID": "85604804686945",
+                        "PRODUCT_TYPE": "4",
+                        "PRODUCT_NAME": "Nokia",
+                        "PRODUCT_PRICE": "3000"
+                    },
+                    {
+                        "PRODUCT_ID": "67364726472",
+                        "PRODUCT_TYPE": "4",
+                        "PRODUCT_NAME": "Baggage",
+                        "PRODUCT_PRICE": "3000"
+                    }
+                ]
+            },
+            {
+                "PRODUCT_ID": "7847594375987439",
+                "PRODUCT_TYPE": "1",
+                "PRODUCT_NAME": "Iphone6",
+                "PRODUCT_PRICE": "6000",
+                "BIND_PRODUCT_ITEMS": []
+            }
+        ]
+    }
+}

@@ -1,0 +1,29 @@
+hy_debug on;
+hy_debug runon; 
+hy_show tabs;
+hy_set log off;
+hy_set loglv debug;
+load Mobile_Pushc
+{
+	Channel chans[2];
+	chans[0].timesCont = 10;
+	chans[0].chanName	=	"微信";
+	
+	chans[0].timesCont = 5;
+	chans[0].chanName	=	"短信";
+	
+	seleChnnel selChan;
+	selChan.chans = chans;
+	
+	User use;
+	use.priChnnel = "北京";
+	use.days[0] = 1;
+	use.days[1] = 3;
+	use.days[2] = 4;
+	use.timeSent = 6;
+	use.brand = "VIP";
+	
+	Channel ret = selChan.selecChn(use,3);
+	ret = selChan.selecChn(use,3);
+}
+end;

@@ -1,0 +1,34 @@
+一、hy_set log on/off;
+在开始或结束或定义中，设置是否写日志
+默认写日志
+
+二、hy_set loglv debug/infor/warn/erro;
+在开始或结束或定义中，设置日志级别
+默认设置erro级别，在本目录下log.txt中，最大100M，超过后备份为log.txt.bak
+
+三、hy_debug on/off;
+在开始或结束或定义中，设置是否开启调试模式
+
+四、hy_debug runon/runoff;
+在开始或结束或定义中，设置是否编译完成立即运行
+
+五、hy_show debug;
+在开始或结束或定义中，展示调试状态
+
+六、hy_show ends/endo;   bShowTreeAtEnd
+在开始或结束或定义中，是否展示语法树
+
+七、hy_show mems/memo;  bShowMembers
+在开始或结束或定义中，是否展示解析后但是未添加符号表成员
+
+八、hy_show tabs/tabo;
+在开始或结束或定义中，是否展示词条和词典定义
+
+九、hy_restart conew;
+在结束，是否再次执行只有一次
+
+十、hy_restart on/off;
+在结束，是否再次执行
+
+十一、hy_end; ctrl+d <EOF>;
+在结束，hy_end本次语法结束，但是如果设置继续运行，仍将继续；ctrl+d <EOF>本次语法及运行无条件结束
