@@ -221,3 +221,8 @@ merge:
 	git checkout dev
 	git branch
 	@ECHO "<---------------end----------------->"
+	
+log:
+	@ECHO "<---------------log git----------------->"
+	git log --pretty=format:"%h - %an, %ar : %s"
+	@ECHO "<---------------end----------------->"
