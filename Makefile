@@ -9,8 +9,12 @@ JFILE2 	= FALSE
 JFILE3 	= FALSE
 #jjtree文件#
 TFILE 	= ./doc/HyRule_noErro.jjt
+#git version comments
 COMMENT=$(com)	
-	
+#git tag comments
+TagCOMMENT=$(tag)
+TagVer=$(tagver)	
+
 #以下部分基本不需要调整#
 #定义目标#
 all: bcp show cleanall runtest move
@@ -170,16 +174,36 @@ git:
 	@ECHO "<---------------do git----------------->"
 ifeq ($(com),)
 	@ECHO 'make git com="comment"'
-else
 	@ECHO "<---------------end----------------->"
-	@ECHO $(COMMENT)
+else
+	@ECHO Version comment is:  $(COMMENT)
 	git status
 	git add Makefile
 	git add doc
 	git add src
 	git status
 	git commit -m "$(COMMENT)"
+	@ECHO "<---------------end----------------->"
 endif
 
 push:
+	@ECHO "<---------------push git----------------->"
 	git push origin master
+	@ECHO "<---------------end----------------->"
+	
+tag:
+	@ECHO "<---------------tag git----------------->"
+ifeq ($(com),)
+	@ECHO 'make tag ="tagname" tagver="v1.0"'
+	@ECHO "<---------------end----------------->"
+else
+	@ECHO tag name is: $(TagCOMMENT) version is $(TagVer)
+	git tag -a $(TagVer) -m "$(TagCOMMENT)"
+	git push origin $(TagVer)
+	@ECHO "<---------------end----------------->"
+endif
+
+status:
+	@ECHO "<---------------status git----------------->"
+	git status
+	@ECHO "<---------------end----------------->"
